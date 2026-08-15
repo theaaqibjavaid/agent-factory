@@ -13,34 +13,47 @@ The first reference implementation is an **Autonomous Hierarchical Software Engi
 ## Architecture
 
 ```
-AgentFactory
-├── factory/                        # Core universal template
-│   ├── __init__.py
-│   ├── llm_manager.py             # Failover router (free→paid tiers, budget control)
-│   ├── base_agent.py              # Agent factory: spawn any agent from YAML
-│   ├── base_tools.py              # Pluggable tool registry (decorator pattern)
-│   └── verifier.py                # Post-execution verification & audit
-├── agents/                         # Agent configurations
-│   ├── config_loader.py           # YAML config parser
-│   ├── engineer_crew.yaml         # 3-tier engineering team profiles
-│   └── worker.py                  # Background worker (polls FastAPI for approvals)
-├── app/
-│   └── approval_server.py         # FastAPI control + Discord/Gmail notifications
-├── tests/
-│   ├── test_llm_manager.py
-│   ├── test_base_agent.py
-│   ├── test_tools.py
-│   └── test_verifier.py
-├── requirements.txt
-├── README.md
-└── pyproject.toml
+agentfactory/
+├── __init__.py              # Package exports (AgentFactory, RunnableAgent, cli)
+├── cli.py                   # CLI entry point (init, run, create-agent, list-tools, status)
+├── config.py                # Pydantic settings with .env loading
+├── llm_manager.py           # FailoverLLMManager — LLM failover + budget control
+├── base_agent.py            # AgentFactory, RunnableAgent, AgentConfig, AgentPersona
+├── base_tools.py            # @tool decorator, ToolRegistry, ToolDef, SafetyLevel
+├── verifier.py              # Verifier — post-execution audit + context pruning
+├── mcp_integration.py       # MCPClient — MCP server integration
+├── py.typed                 # PEP 561 type marker
+│
+├── tools/                   # Built-in tool implementations
+│   ├── __init__.py          # Auto-registration + legacy aliases
+│   ├── git_tools.py         # 8 git tools (branch, commit, PR, etc.)
+│   ├── web_tools.py         # 3 web tools (search, fetch, scrape)
+│   ├── file_tools.py        # 7 file tools (read, write, search, etc.)
+│   └── notify_tools.py      # 3 notification tools (Discord, Gmail, webhook)
+│
+├── agents/                  # Agent config + worker
+│   ├── config_loader.py     # YAML config parser + DEFAULT_REPO_PATHS
+│   ├── worker.py            # Background polling worker
+│   ├── engineering_crew.py  # Tiered engineering team orchestrator
+│   └── examples/
+│       └── engineer_crew.yaml  # 3-tier team reference config
+│
+└── app/                     # FastAPI control plane
+    └── approval_server.py   # FastAPI app — approval, state, notifications
+
+tests/                      # 56 tests (test_core.py, test_factory.py)
+docs/                       # 14 documentation files
+pyproject.toml              # Production packaging with entry point
+requirements.txt            # Pinned dependencies
+LICENSE                     # MIT
+.env.example                # All environment variables documented
 ```
 
 ## Quick Start
 
 ```bash
-# 1. Install dependencies
-pip install -r requirements.txt
+# 1. Install as a package
+pip install agentfactory
 
 # 2. Set environment variables
 export GEMINI_API_KEY="your-gemini-key"          # Free tier
@@ -55,11 +68,11 @@ export BACKEND_PATH="/absolute/path/to/fastapi-backend"
 export FRONTEND_PATH="/absolute/path/to/react-frontend"
 export ADMIN_PATH="/absolute/path/to/admin-panel"
 
-# 3. Launch the FastAPI approval server
-uvicorn app.approval_server:app --reload --port 8000
+# 3. Initialize (creates .env, mcp.json, example agent configs)
+agentfactory init
 
-# 4. Launch the background worker
-python agents/worker.py
+# 4. Launch the FastAPI approval server + background worker
+agentfactory run
 ```
 
 ## Usage

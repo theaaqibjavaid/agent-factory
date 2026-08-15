@@ -1,10 +1,14 @@
 """
-Engineering Crew — Tiered multi-agent orchestrator.
+Engineering Crew — Tiered multi-agent orchestrator (Reference Implementation).
 
 Implements a 3-tier hierarchical team:
 1. Senior Lead Architect (Supervisor) — researches, plans, proposes
 2. Junior Feature Engineer (Worker) — writes code on feature branches
 3. QA Security Auditor (Validator) — runs tests, catches failures
+
+NOTE: This is a reference implementation. It demonstrates the tiered team
+pattern using AgentFactory's core primitives. For production use, extend
+this class with your own verification logic, repo integration, and error handling.
 
 This module defines the coordination logic between agents.
 """
@@ -42,7 +46,11 @@ class TieredEngineeringTeam:
             configs = load_crew_config(yaml_path)
 
         self.configs = configs
-        self.verifier = Verifier(repo_paths=REPO_PATHS)
+        self.verifier = Verifier()  # Uses default context window
+
+        # Shared tool registry
+        from agentfactory.base_tools import ToolRegistry
+        self._registry = ToolRegistry()
 
         # Instantiate agents
         self.senior_architect = self._instantiate_agent(configs.get("Senior_Lead_Architect"))
@@ -60,7 +68,30 @@ class TieredEngineeringTeam:
         """Instantiate a RunnableAgent from config."""
         if config is None:
             return None
-        return AgentFactory.create_runnable_agent(config)
+
+        # Create persona from config
+        from agentfactory.base_agent import AgentPersona
+
+        persona = AgentPersona(
+            rank=config.rank,
+            responsibilities=[config.role_description] if config.role_description else [],
+            system_instructions=config.system_instructions,
+            model_preferences=config.model_preference,
+            max_budget_usd_per_day=config.max_budget_usd_per_day,
+            allow_delegation=config.allow_delegation,
+            max_iterations=20,
+        )
+
+        llm_manager = FailoverLLMManager(
+            model_preferences=config.model_preference,
+            daily_budget_usd=config.max_budget_usd_per_day,
+        )
+
+        return RunnableAgent(
+            persona=persona,
+            tool_registry=self._get_shared_registry(),
+            llm_manager=llm_manager,
+        )
 
     def process_request(self, feature_request: str) -> Dict[str, Any]:
         """
@@ -89,8 +120,15 @@ class TieredEngineeringTeam:
             "instructions": "Wait for human approval via FastAPI server. Worker will execute automatically.",
         }
 
+    def _get_shared_registry(self):
+        """Get the shared tool registry."""
+        return self._registry
+
     def _run_senior_architect(self, request: str) -> str:
         """Run the Senior Architect to produce a plan."""
+        if self.senior_architect is None:
+            return "Senior Architect not initialized"
+
         prompt = f"""
 You are the Senior Lead Architect. Analyze this feature request:
 
@@ -108,7 +146,13 @@ Your task:
 Return ONLY valid JSON, no extra text.
         """
 
-        response = self.senior_architect.run(prompt)
+        import asyncio
+
+        async def _run():
+            response = await self.senior_architect.think(prompt)
+            return response
+
+        response = asyncio.run(_run())
 
         # Extract JSON from response
         try:
@@ -160,6 +204,10 @@ Return ONLY valid JSON, no extra text.
             logger.warning("FastAPI server not running — proposal not registered. Start with: uvicorn app.approval_server:app --port 8000")
 
         return proposal_id
+
+    async def _verify_content(self, file_path: str, file_content: str):
+        """Verify file content and return VerificationResult."""
+        return await self.verifier.verify_file(file_path, file_content)
 
     def execute_approved_feature(
         self,
@@ -214,7 +262,35 @@ Return ONLY valid JSON, no extra text.
         # Step 2: QA Auditor runs verification
         qa_results = {}
         for repo_key in updates:
-            report = self.verifier.run_full_verification(feature_name, branch_name, repo_key)
+            # Use verifier to check the written content
+            import asyncio
+
+            file_path = updates[repo_key].get("path", "")
+            file_content = updates[repo_key].get("content", "")
+            verification = asyncio.run(self._verify_content(file_path, file_content))
+
+            report = VerificationReport(
+                feature_name=feature_name,
+                branch_name=branch_name,
+            )
+            # Convert verification result to report format
+            from agentfactory.verifier import AuditResult
+            for check_name in verification.passed_checks:
+                report.add_check(AuditResult(
+                    name=check_name,
+                    passed=True,
+                    message="Check passed",
+                    file_path=file_path,
+                ))
+            for failed in verification.failed_checks:
+                report.add_check(AuditResult(
+                    name=failed.name,
+                    passed=False,
+                    message=failed.message,
+                    file_path=file_path,
+                    line_number=failed.line_number,
+                ))
+
             qa_results[repo_key] = report.to_dict()
 
             # If QA fails, attempt self-correction (max 2 loops)
@@ -223,8 +299,22 @@ Return ONLY valid JSON, no extra text.
                     repo_key, feature_name, branch_name, report, updates[repo_key]
                 )
                 if corrected:
-                    # Re-run verification
-                    report = self.verifier.run_full_verification(feature_name, branch_name, repo_key)
+                    # Re-verify the corrected content
+                    repo_path = REPO_PATHS.get(repo_key, "")
+                    corrected_path = os.path.join(repo_path, updates[repo_key].get("path", ""))
+                    try:
+                        with open(corrected_path, "r", encoding="utf-8") as f:
+                            corrected_content = f.read()
+                        verification = asyncio.run(self._verify_content(corrected_path, corrected_content))
+
+                        report = VerificationReport(feature_name=feature_name, branch_name=branch_name)
+                        from agentfactory.verifier import AuditResult
+                        for check_name in verification.passed_checks:
+                            report.add_check(AuditResult(name=check_name, passed=True, message="Check passed", file_path=corrected_path))
+                        for failed in verification.failed_checks:
+                            report.add_check(AuditResult(name=failed.name, passed=False, message=failed.message, file_path=corrected_path, line_number=failed.line_number))
+                    except Exception:
+                        pass
                     qa_results[repo_key] = report.to_dict()
 
         results["verification"] = qa_results
@@ -288,7 +378,13 @@ Rewrite the file content to address all issues. Return the full corrected file c
         """
 
         try:
-            response = self.junior_engineer.run(prompt)
+            import asyncio
+
+            async def _run_correction():
+                response = await self.junior_engineer.think(prompt)
+                return response
+
+            response = asyncio.run(_run_correction())
             # Write corrected content
             repo_path = REPO_PATHS.get(repo_key, "")
             file_path = os.path.join(repo_path, update.get("path", ""))

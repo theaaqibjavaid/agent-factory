@@ -152,14 +152,42 @@ class AgentWorker:
         # Determine target repository
         repo_path = self._resolve_repo_path(feature_name, blueprint)
 
-        # Create a Senior agent clone for this repo
-        senior = self.factory.create_agent("Senior", repo_name=feature_name)
+        # Create agent from config for this repo
+        from agentfactory.agents.config_loader import load_crew_config, get_config_path
+
+        # Load crew config to get the proper agent tier
+        try:
+            configs = load_crew_config(get_config_path("engineer_crew.yaml"))
+            junior_config = configs.get("Junior_Feature_Engineer")
+        except Exception:
+            junior_config = None
+
+        if junior_config:
+            from agentfactory.base_agent import AgentPersona
+            from agentfactory.llm_manager import FailoverLLMManager
+
+            persona = AgentPersona(
+                rank=junior_config.rank,
+                responsibilities=[junior_config.role_description] if junior_config.role_description else [],
+                system_instructions=junior_config.system_instructions,
+                model_preferences=junior_config.model_preference,
+                max_budget_usd_per_day=junior_config.max_budget_usd_per_day,
+                allow_delegation=junior_config.allow_delegation,
+            )
+            llm_manager = FailoverLLMManager(
+                model_preferences=junior_config.model_preference,
+                daily_budget_usd=junior_config.max_budget_usd_per_day,
+            )
+            agent = RunnableAgent(
+                persona=persona,
+                tool_registry=self.factory.get_shared_registry(),
+                llm_manager=llm_manager,
+            )
+        else:
+            agent = self.factory.create_agent("Junior")
 
         # Build execution task
         task = self._build_execution_task(feature_name, plan, blueprint, extra_instructions)
-
-        # Clone agent for this specific repo
-        agent = self.factory.create_agent("Senior")
 
         # Run the agent asynchronously
         import asyncio

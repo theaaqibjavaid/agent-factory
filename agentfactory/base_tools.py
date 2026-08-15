@@ -274,8 +274,6 @@ class ToolWrapper:
 
     async def execute(self, arguments: Dict[str, Any]) -> str:
         """Execute the tool with given arguments."""
-        import inspect
-
         sig = inspect.signature(self._func)
         filtered_args = {}
         for param_name in sig.parameters:
