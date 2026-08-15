@@ -18,8 +18,9 @@ import json
 from agentfactory.config import settings
 from agentfactory.llm_manager import FailoverLLMManager, LLMConfig
 from agentfactory.base_tools import ToolRegistry, ToolWrapper as Tool, ToolCall, tool
-from agentfactory.verifier import Verifier, VerificationResult
+from agentfactory.verifier import Verifier, VerificationResult, VerificationReport, AuditResult
 from agentfactory.mcp_integration import MCPServerConfig, register_mcp_tools, cleanup_mcp_clients
+from agentfactory.memory import PersistentMemory
 
 logger = structlog.get_logger()
 
@@ -103,6 +104,8 @@ class RunnableAgent:
         tool_registry: ToolRegistry,
         llm_manager: Optional[FailoverLLMManager] = None,
         mcp_configs: Optional[Dict[str, MCPServerConfig]] = None,
+        agent_id: str = "default",
+        memory: Optional[PersistentMemory] = None,
     ):
         self.persona = persona
         self.tools = tool_registry
@@ -111,12 +114,36 @@ class RunnableAgent:
         self.stats = AgentExecutionStats()
         self.verifier = Verifier()
 
+        # Persistent memory — enables conversation history across restarts
+        self.agent_id = agent_id
+        self.memory = memory or PersistentMemory(agent_id=agent_id)
+
         # Memory: rolling conversation history with context window limit
         self._history: List[Dict[str, Any]] = []
         self._max_history_tokens: int = persona.max_context_length - 20000  # Reserve for tools
 
-        # MCP clients for tool integration
-        self._mcp_clients: Dict[str, Any] = {}
+        # Load persistent history on init
+        self._load_persistent_history()
+
+    def _load_persistent_history(self) -> None:
+        """Load conversation history from persistent memory."""
+        if self.memory:
+            try:
+                saved = self.memory.load_history(limit=50)
+                if saved:
+                    self._history = saved
+                    logger.debug(f"Loaded {len(saved)} messages from persistent memory")
+            except Exception as e:
+                logger.warning(f"Could not load persistent history: {e}")
+
+    def _save_persistent_history(self) -> None:
+        """Save conversation history to persistent memory."""
+        if self.memory and self._history:
+            try:
+                new_messages = self._history[-len(self._history):]
+                self.memory.save_history(new_messages)
+            except Exception as e:
+                logger.debug(f"Could not save persistent history: {e}")
 
     @classmethod
     def clone(cls, agent: "RunnableAgent", tool_registry: ToolRegistry) -> "RunnableAgent":
@@ -159,7 +186,14 @@ class RunnableAgent:
             self._history.extend(context)
 
         messages = self._build_messages(task)
-        return await self.llm_manager.generate_with_failover(messages)
+        result = await self.llm_manager.generate_with_failover(messages)
+
+        # Save to persistent memory
+        self._history.append({"role": "user", "content": task})
+        self._history.append({"role": "assistant", "content": result})
+        self._save_persistent_history()
+
+        return result
 
     async def execute_tool(self, tool_name: str, tool_args: Dict[str, Any]) -> str:
         """

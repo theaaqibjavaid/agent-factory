@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     mcp_config_file: str = Field(default="mcp.json", alias="MCP_CONFIG_FILE")
     mcp_servers_dir: str = Field(default="mcp_servers", alias="MCP_SERVERS_DIR")
 
+    # ============================================================
+    # Persistent Memory
+    # ============================================================
+    memory_db_path: str = Field(default="", alias="MEMORY_DB_PATH")
+
     @field_validator("daily_budget_usd")
     @classmethod
     def validate_budget(cls, v: float) -> float:
