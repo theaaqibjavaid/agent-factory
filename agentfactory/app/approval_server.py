@@ -9,11 +9,12 @@ Features:
 - RESTful API for proposal registration and review
 """
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import os
 import json
 import sqlite3
@@ -37,6 +38,62 @@ structlog.configure(
     cache_logger_on_first_use=True,
 )
 logger = structlog.get_logger()
+
+# ============================================================
+# JWT Authentication
+# ============================================================
+
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
+JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "agentfactory")
+
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def _is_auth_enabled() -> bool:
+    """Check if JWT authentication is enabled (secret key set)."""
+    return bool(JWT_SECRET_KEY)
+
+
+def _encode_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    """Encode a JWT token."""
+    import jwt
+    to_encode = data.copy()
+    now = datetime.now(timezone.utc)
+    expire = now + (expires_delta or timedelta(hours=JWT_EXPIRATION_HOURS))
+    to_encode.update({"iat": int(now.timestamp()), "exp": int(expire.timestamp()), "aud": JWT_AUDIENCE})
+    return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+
+def _decode_token(token: str) -> Dict[str, Any]:
+    """Decode and validate a JWT token."""
+    import jwt
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM], audience=JWT_AUDIENCE, options={"require_aud": True, "require_exp": True, "require_iat": True})
+        return payload
+    except jwt.PyJWTError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid or expired token: {str(e)}", headers={"WWW-Authenticate": "Bearer"})
+
+
+async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)) -> Dict[str, Any]:
+    """Dependency to authenticate requests via JWT bearer token."""
+    if not _is_auth_enabled():
+        return {"sub": "public", "roles": ["public"]}
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required", headers={"WWW-Authenticate": "Bearer"})
+    return _decode_token(credentials.credentials)
+
+
+def require_role(*roles: str):
+    """Dependency factory: require one of the specified roles."""
+    async def role_checker(user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
+        user_roles = user.get("roles", [])
+        if not any(r in user_roles for r in roles):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Insufficient permissions. Required: {roles}")
+        return user
+    return role_checker
+
 
 # ============================================================
 # FastAPI App
@@ -176,7 +233,43 @@ class ProposalResponse(BaseModel):
 @app.get("/")
 async def root():
     """Health check endpoint — returns no tokens, no sensitive data."""
-    return {"status": "ok", "service": "AgentFactory Approval Server", "version": "1.0.0"}
+    return {"status": "ok", "service": "AgentFactory Approval Server", "version": "1.0.0", "auth_enabled": _is_auth_enabled()}
+
+
+class TokenRequest(BaseModel):
+    """Request a JWT token (requires JWT_SECRET_KEY to be configured)."""
+    sub: str = Field(..., description="Subject (user identifier)")
+    roles: List[str] = Field(default_factory=lambda: ["user"])
+    expires_hours: Optional[int] = Field(default=None, description="Custom expiry in hours")
+
+
+@app.post("/api/agent/token")
+async def issue_token(payload: TokenRequest):
+    """
+    Issue a JWT token for API access.
+
+    This endpoint is only available when JWT_SECRET_KEY is set in the environment.
+    In production, front this with an identity provider or API gateway.
+
+    Args:
+        sub: User identifier (e.g., email or username)
+        roles: Roles to assign (e.g., ["user"], ["admin"])
+        expires_hours: Custom token expiry (defaults to JWT_EXPIRATION_HOURS)
+
+    Returns:
+        JWT token string
+    """
+    if not _is_auth_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="JWT authentication is not configured. Set JWT_SECRET_KEY environment variable.",
+        )
+
+    expires_delta = timedelta(hours=payload.expires_hours) if payload.expires_hours else None
+    token = _encode_token({"sub": payload.sub, "roles": payload.roles}, expires_delta)
+
+    logger.info("Token issued", sub=payload.sub, roles=payload.roles)
+    return {"access_token": token, "token_type": "bearer"}
 
 
 @app.get("/api/agent/status")
@@ -214,7 +307,7 @@ async def get_status():
         conn.close()
 
 
-@app.post("/api/agent/propose")
+@app.post("/api/agent/propose", dependencies=[Depends(get_current_user)])
 async def propose_feature(payload: ProposalPayload):
     """
     Register a new feature proposal.
@@ -268,7 +361,7 @@ async def propose_feature(payload: ProposalPayload):
     }
 
 
-@app.post("/api/agent/review")
+@app.post("/api/agent/review", dependencies=[Depends(get_current_user)])
 async def review_proposal(payload: ReviewPayload):
     """
     Review an approval: APPROVE, REJECT, or MODIFY.
@@ -345,7 +438,7 @@ async def review_proposal(payload: ReviewPayload):
         conn.close()
 
 
-@app.post("/api/agent/executed")
+@app.post("/api/agent/executed", dependencies=[Depends(get_current_user)])
 async def mark_executed():
     """Mark the current proposal as completed after worker finishes."""
     conn = get_db()
@@ -402,7 +495,7 @@ async def list_proposals(limit: int = 20, status_filter: Optional[str] = None):
         conn.close()
 
 
-@app.delete("/api/agent/proposals/{proposal_id}")
+@app.delete("/api/agent/proposals/{proposal_id}", dependencies=[Depends(get_current_user)])
 async def delete_proposal(proposal_id: str):
     """Delete a proposal (admin operation)."""
     conn = get_db()

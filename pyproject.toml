@@ -62,6 +62,7 @@ all = [
     "langfuse>=2.0",
     "langchain-community>=0.3.0",
     "duckduckgo-search>=6.0",
+    "PyJWT>=2.8.0",
 ]
 
 [project.scripts]

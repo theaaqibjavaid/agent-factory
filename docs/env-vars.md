@@ -62,3 +62,23 @@ ADMIN_PATH=/absolute/path/to/admin-panel
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `AGENT_SERVER_URL` | URL for CLI `status` command to check server | `http://localhost:8000/api/agent/status` |
+
+## Persistent Memory
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MEMORY_DB_PATH` | Path to SQLite memory database | `~/.agentfactory/memory.db` |
+| `MEMORY_AGENT_ID` | Default agent ID for memory isolation | `default` |
+
+## JWT Authentication (Optional)
+
+Set `JWT_SECRET_KEY` to enable JWT bearer token auth on the approval server.
+Generate one with: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `JWT_SECRET_KEY` | Secret key for signing JWT tokens | *(empty — auth disabled)* |
+| `JWT_ALGORITHM` | JWT signing algorithm | `HS256` |
+| `JWT_EXPIRATION_HOURS` | Token expiry in hours | `24` |
+| `JWT_AUDIENCE` | Expected audience claim | `agentfactory` |
+| `APPROVAL_DB_PATH` | Path to approval server SQLite DB | `~/.agentfactory/approval.db` |

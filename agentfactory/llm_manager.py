@@ -12,8 +12,9 @@ Usage:
 
 import os
 import time
+import json
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, AsyncGenerator
 import structlog
 
 from agentfactory.config import settings
@@ -310,6 +311,209 @@ class FailoverLLMManager:
             )
 
         raise ValueError(f"Unknown provider: {config.provider}")
+
+    def generate_with_tools(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Generate text with native tool calling support.
+
+        Uses the LLM's native function_call / tool_use capability
+        instead of parsing tool calls from text output.
+
+        Args:
+            messages: Conversation messages
+            tools: List of tool schemas in OpenAI format:
+                   {"name": "tool_name", "description": "...", "parameters": {...}}
+
+        Returns:
+            Dict with:
+              - "text": generated text (may be empty if tool was called)
+              - "tool_calls": list of {"name", "arguments"} dicts (may be empty)
+        """
+        try:
+            llm = self.get_active_llm()
+
+            # Convert tools to appropriate format for each provider
+            if hasattr(llm, "bind_tools"):
+                # LangChain 0.3+ has bind_tools
+                llm_with_tools = llm.bind_tools(tools)
+                response = llm_with_tools.invoke(messages)
+            else:
+                # Fallback: use raw provider API
+                response = self._raw_tool_call(llm, messages, tools)
+
+            # Parse response — may contain both text and tool calls
+            tool_calls = []
+            text_parts = []
+
+            if hasattr(response, "tool_calls") and response.tool_calls:
+                for tc in response.tool_calls:
+                    tool_calls.append({
+                        "name": tc.get("name", ""),
+                        "arguments": tc.get("args", tc.get("arguments", {})),
+                        "id": tc.get("id", ""),
+                    })
+
+            if hasattr(response, "content"):
+                if isinstance(response.content, str):
+                    text_parts.append(response.content)
+                elif isinstance(response.content, list):
+                    for part in response.content:
+                        if isinstance(part, dict):
+                            if part.get("type") == "text":
+                                text_parts.append(part.get("text", ""))
+                            elif part.get("type") == "tool_use":
+                                tool_calls.append({
+                                    "name": part.get("name", ""),
+                                    "arguments": part.get("input", {}),
+                                    "id": part.get("id", ""),
+                                })
+
+            # Track token usage
+            if hasattr(response, "usage") and response.usage:
+                usage = TokenUsage(
+                    input_tokens=getattr(response.usage, "prompt_tokens", 0),
+                    output_tokens=getattr(response.usage, "completion_tokens", 0),
+                    model=self.get_current_model_name(),
+                )
+                self.add_cost(usage.cost_usd(), usage.model, usage)
+
+            return {
+                "text": "\n".join(text_parts),
+                "tool_calls": tool_calls,
+            }
+
+        except PermissionError:
+            return {"text": "Error: Daily budget exceeded.", "tool_calls": []}
+        except RuntimeError:
+            return {"text": "Error: No LLM models available.", "tool_calls": []}
+        except Exception as e:
+            should_failover = self.handle_rate_limit_failover(e)
+            if should_failover:
+                try:
+                    return self.generate_with_tools(messages, tools)
+                except Exception:
+                    return {"text": f"Error after failover: {str(e)}", "tool_calls": []}
+            return {"text": f"Error generating text: {str(e)}", "tool_calls": []}
+
+    def _raw_tool_call(self, llm, messages, tools):
+        """Fallback for providers without bind_tools support."""
+        # Convert messages to provider format and add tools
+        import json
+
+        if "openai" in type(llm).__name__.lower():
+            return llm.client.chat.completions.create(
+                model=llm.model_name,
+                messages=messages,
+                tools=[{"type": "function", "function": t} for t in tools],
+                temperature=getattr(llm, "temperature", 0.2),
+            )
+        elif "anthropic" in type(llm).__name__.lower():
+            return llm.client.messages.create(
+                model=llm.model,
+                messages=[{"role": m["role"], "content": m["content"]} for m in messages],
+                tools=[{"type": "ext_tool", "name": t["name"], "input_schema": t.get("parameters", {})} for t in tools],
+                max_tokens=getattr(llm, "max_tokens", 4000),
+            )
+        # Fallback to regular invoke
+        return llm.invoke(messages)
+
+    async def generate_streaming(
+        self,
+        messages: List[Dict[str, Any]],
+        max_tokens: int = 4000,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Generate text with streaming (async iterator over tokens/chunks).
+
+        Args:
+            messages: Conversation messages
+            max_tokens: Maximum tokens to generate
+
+        Yields:
+            Each chunk of generated text as it becomes available
+        """
+        try:
+            llm = self.get_active_llm()
+
+            if hasattr(llm, "astream"):
+                async for chunk in llm.astream(messages):
+                    if hasattr(chunk, "content") and chunk.content:
+                        yield str(chunk.content)
+                    else:
+                        yield str(chunk)
+            elif hasattr(llm, "stream"):
+                # Sync streaming fallback
+                for chunk in llm.stream(messages):
+                    if hasattr(chunk, "content") and chunk.content:
+                        yield str(chunk.content)
+                    else:
+                        yield str(chunk)
+            else:
+                # No streaming support — fall back to single call
+                response = await self.generate_with_failover(messages)
+                yield response
+
+        except PermissionError:
+            yield "Error: Daily budget exceeded."
+        except RuntimeError:
+            yield "Error: No LLM models available."
+        except Exception as e:
+            should_failover = self.handle_rate_limit_failover(e)
+            if should_failover:
+                async for chunk in self.generate_streaming(messages, max_tokens):
+                    yield chunk
+            else:
+                yield f"Error generating text: {str(e)}"
+
+    async def generate_streaming_with_tools(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Generate text with streaming and tool calling.
+
+        Yields dicts with either:
+          - {"type": "chunk", "content": "text chunk"}
+          - {"type": "tool_call", "name": "tool_name", "arguments": {...}}
+        """
+        try:
+            llm = self.get_active_llm()
+
+            if hasattr(llm, "bind_tools"):
+                llm_with_tools = llm.bind_tools(tools)
+                if hasattr(llm_with_tools, "astream"):
+                    async for chunk in llm_with_tools.astream(messages):
+                        if hasattr(chunk, "tool_call_chunks") and chunk.tool_call_chunks:
+                            for tc in chunk.tool_call_chunks:
+                                if tc.get("name") and tc.get("args"):
+                                    yield {
+                                        "type": "tool_call",
+                                        "name": tc["name"],
+                                        "arguments": json.loads(tc.get("args", "{}")) if tc.get("args") else {},
+                                    }
+                        if hasattr(chunk, "content") and chunk.content:
+                            yield {"type": "chunk", "content": str(chunk.content)}
+                else:
+                    response = await self.generate_with_tools(messages, tools)
+                    for tc in response["tool_calls"]:
+                        yield {"type": "tool_call", "name": tc["name"], "arguments": tc["arguments"]}
+                    if response["text"]:
+                        yield {"type": "chunk", "content": response["text"]}
+            else:
+                # Fallback to non-streaming
+                response = await self.generate_with_tools(messages, tools)
+                for tc in response["tool_calls"]:
+                    yield {"type": "tool_call", "name": tc["name"], "arguments": tc["arguments"]}
+                if response["text"]:
+                    yield {"type": "chunk", "content": response["text"]}
+
+        except Exception as e:
+            yield {"type": "error", "content": str(e)}
 
     def handle_rate_limit_failover(self, error: Optional[Exception] = None) -> bool:
         """

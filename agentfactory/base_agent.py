@@ -21,6 +21,7 @@ from agentfactory.base_tools import ToolRegistry, ToolWrapper as Tool, ToolCall,
 from agentfactory.verifier import Verifier, VerificationResult, VerificationReport, AuditResult
 from agentfactory.mcp_integration import MCPServerConfig, register_mcp_tools, cleanup_mcp_clients
 from agentfactory.memory import PersistentMemory
+from agentfactory.skill import SkillRegistry, Skill
 
 logger = structlog.get_logger()
 
@@ -162,7 +163,7 @@ class RunnableAgent:
         """Lazily connect to MCP servers and register their tools."""
         if self.mcp_configs and not self._mcp_clients:
             logger.debug(f"Connecting to MCP servers for {self.persona.rank} agent")
-            self._mcp_clients = register_mcp_tools(self.tools, self.mcp_configs)
+            self._mcp_clients = await register_mcp_tools(self.tools, self.mcp_configs)
 
     async def think(
         self,
@@ -430,6 +431,90 @@ Please fix the issues above and retry.
         """Clean up resources."""
         await cleanup_mcp_clients(self._mcp_clients)
 
+    async def learn_from_correction(
+        self,
+        original_prompt: str,
+        original_output: str,
+        correction: str,
+        max_correction_iterations: int = 2,
+    ) -> str:
+        """
+        Learn from a correction by re-running the prompt with correction context.
+
+        This is the feedback learning loop: given what the agent originally
+        produced and a human correction, the agent re-attempts the task
+        with the correction baked into context, then saves the corrected
+        conversation to persistent memory.
+
+        Args:
+            original_prompt: The original task/prompt that was given
+            original_output: The agent's original (incorrect) output
+            correction: The human-provided correction/note
+            max_correction_iterations: Maximum self-correction attempts
+
+        Returns:
+            The corrected output
+        """
+        logger.info(
+            f"Learning from correction for {self.persona.rank} agent",
+            correction_length=len(correction),
+        )
+
+        # Build a learning prompt that includes the original attempt and correction
+        learning_prompt = self._build_system_prompt()
+        learning_prompt += f"""
+
+ORIGINAL TASK:
+{original_prompt}
+
+YOUR ORIGINAL OUTPUT:
+{original_output}
+
+HUMAN CORRECTION:
+{correction}
+
+INSTRUCTIONS: Redo the task, taking the correction into account. Do not repeat the
+same mistakes. You can use tools if needed."""
+
+        # Store the learning context in history for future reference
+        self._history.append({
+            "role": "user",
+            "content": f"[CORRECTION LEARNING] Original task: {original_prompt[:200]}... Correction: {correction[:200]}...",
+        })
+
+        # Re-run with correction context
+        corrected_output = ""
+        for iteration in range(max_correction_iterations):
+            result = await self.think(learning_prompt, require_tool=False)
+            corrected_output = result
+            self._history.append({"role": "assistant", "content": result})
+
+            # If the result looks corrected (non-empty and different), we're done
+            if result.strip() and result != original_output:
+                break
+
+            # Try self-correction with more detail
+            learning_prompt += f"\n\nPrevious attempt was insufficient. Please improve:\n{result}"
+
+        # Save the correction learning to persistent memory as a fact
+        if self.memory:
+            try:
+                self.memory.save_fact(
+                    "correction_learning",
+                    f"Prompt: {original_prompt[:500]} | Correction: {correction[:500]}",
+                )
+            except Exception as e:
+                logger.debug(f"Could not save correction learning to memory: {e}")
+
+        self._save_persistent_history()
+
+        logger.info(
+            f"Correction learning complete for {self.persona.rank} agent",
+            corrected_length=len(corrected_output),
+        )
+
+        return corrected_output
+
 
 # ============================================================
 # AgentFactory: Registry of agent types
@@ -488,6 +573,7 @@ class AgentFactory:
         self._personas: Dict[str, AgentPersona] = self.DEFAULT_PERSONAS.copy()
         self._mcp_configs: Dict[str, MCPServerConfig] = {}
         self._llm_managers: Dict[str, FailoverLLMManager] = {}
+        self.skill_registry = SkillRegistry()
 
     @staticmethod
     def _build_system_prompt(config: "AgentConfig") -> str:
@@ -512,6 +598,25 @@ class AgentFactory:
         """Register a list of tool functions."""
         for t in tools:
             self._registry.register_function(t)
+
+    def register_skill(self, skill: Skill) -> None:
+        """Register a skill into the skill registry."""
+        self.skill_registry.register_skill(skill)
+
+    def load_skill_package(self, package_name: str) -> Optional[Skill]:
+        """Load a skill from an installed Python package."""
+        return self.skill_registry.load_from_package(package_name)
+
+    def load_skills_from_directory(self, directory: str) -> List[Skill]:
+        """Load all skills from a directory of Python files."""
+        return self.skill_registry.load_from_directory(directory)
+
+    def install_skill(self, skill_name: str) -> None:
+        """Install a registered skill's tools into the tool registry."""
+        skill = self.skill_registry.get_skill(skill_name)
+        if skill is None:
+            raise ValueError(f"Unknown skill: {skill_name}")
+        skill.register_into(self._registry)
 
     def load_mcp_config(self, config_path: str = "mcp.json") -> None:
         """Load MCP server configurations."""

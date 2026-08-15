@@ -240,42 +240,40 @@ def create_mcp_config_template(output_path: str = "mcp.json"):
 # Registry Integration
 # ============================================================
 
-def register_mcp_tools(registry: ToolRegistry, mcp_configs: Dict[str, MCPServerConfig]) -> Dict[str, MCPClient]:
+async def register_mcp_tools(registry: ToolRegistry, mcp_configs: Dict[str, MCPServerConfig]) -> Dict[str, MCPClient]:
     """
     Register MCP server tools into the given ToolRegistry.
+
+    This is an async function — use `await register_mcp_tools(...)` from async code,
+    or `asyncio.run(register_mcp_tools(...))` from synchronous code.
 
     Returns a dict of connected MCP clients for later cleanup.
     """
     clients: Dict[str, MCPClient] = {}
-    loop = asyncio.new_event_loop()
 
-    try:
-        for name, config in mcp_configs.items():
-            if not config.enabled:
-                continue
+    for name, config in mcp_configs.items():
+        if not config.enabled:
+            continue
 
-            logger.info(f"Connecting to MCP server: {name}")
-            client = MCPClient(config)
+        logger.info(f"Connecting to MCP server: {name}")
+        client = MCPClient(config)
 
-            try:
-                loop.run_until_complete(client.connect())
-                tools = loop.run_until_complete(client.list_tools())
-                clients[name] = client
+        try:
+            await client.connect()
+            tools = await client.list_tools()
+            clients[name] = client
 
-                for tool_info in tools:
-                    registry.register_mcp_tool(
-                        tool_info.name,
-                        tool_info.metadata,
-                        server_name=tool_info.server_name,
-                        client=client,
-                    )
-                    logger.debug(f"Registered MCP tool: {tool_info.name} from {tool_info.server_name}")
+            for tool_info in tools:
+                registry.register_mcp_tool(
+                    tool_info.name,
+                    tool_info.metadata,
+                    server_name=tool_info.server_name,
+                    client=client,
+                )
+                logger.debug(f"Registered MCP tool: {tool_info.name} from {tool_info.server_name}")
 
-            except Exception as e:
-                logger.warning(f"Failed to connect to MCP server '{name}': {e}")
-    finally:
-        # Don't close clients here — they need to stay alive
-        pass
+        except Exception as e:
+            logger.warning(f"Failed to connect to MCP server '{name}': {e}")
 
     return clients
 

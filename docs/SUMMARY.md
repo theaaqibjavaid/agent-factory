@@ -11,6 +11,9 @@
 - [Architecture](architecture.md) — Universal agent factory, ranked hierarchy, LLM failover pipeline, tool registry, MCP integration.
 - [Agent Configuration](agent-config.md) — YAML schema for defining agent teams (engineer_crew, custom configs).
 - [Tool System](tools.md) — Using built-in tools, writing custom tools with the `@tool` decorator, legacy alias compatibility.
+- [Persistent Memory](memory.md) — SQLite-backed fact storage and conversation history across sessions.
+- [Skills](skills.md) — Skill marketplace: dynamic skill loading from packages or directories.
+- [Feedback Learning](feedback-learning.md) — Agent self-improvement via learn_from_correction().
 - [LLM Failover & Budgeting](llm-failover.md) — Gemini-first → OpenAI → Anthropic failover with daily USD budget control and Langfuse tracing.
 - [Approval Server](approval-server.md) — FastAPI control plane: SQLite state, Discord/Gmail notifications, API endpoints.
 - [MCP Integration](mcp-integration.md) — Model Context Protocol server configuration and custom tool loading.

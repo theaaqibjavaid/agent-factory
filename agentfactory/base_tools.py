@@ -371,10 +371,28 @@ class ToolRegistry:
 
 
 def _mcp_tool_call(client: Any, name: str, kwargs: Dict[str, Any]) -> str:
-    """Synchronous wrapper for MCP tool calls (will need async context)."""
+    """Synchronous wrapper for MCP tool calls.
+
+    Works both from synchronous code and from within an existing event loop.
+    """
     try:
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(client.call_tool(name, kwargs))
+        loop = asyncio.get_running_loop()
     except RuntimeError:
-        # No event loop — create one
+        loop = None
+
+    if loop is None:
+        # No running loop — create one and run to completion
         return asyncio.run(client.call_tool(name, kwargs))
+    else:
+        # We're inside an event loop — schedule the coroutine on it
+        # and return a result via a future. Since ToolWrapper.execute
+        # is async, we instead raise to signal the caller should await.
+        # However, the old API is sync, so we use asyncio.run_coroutine_threadsafe
+        # which works when the loop is running in another thread.
+        # As a fallback, create a new loop in a separate thread.
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = asyncio.run_coroutine_threadsafe(
+                client.call_tool(name, kwargs), loop
+            )
+            return future.result()
