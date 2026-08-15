@@ -1,0 +1,95 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentfactory"
+version = "1.0.0"
+description = "Universal AI Agent Factory with multi-repo dev team"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "AgentFactory", email = "hello@agentfactory.ai"}]
+keywords = ["ai", "agent", "llm", "multi-repo", "fastapi", "react"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Artificial Intelligence",
+]
+dependencies = [
+    "langchain>=0.3.0",
+    "langchain-core>=0.3.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
+    "pyyaml>=6.0",
+    "structlog>=24.0",
+    "click>=8.1",
+    "requests>=2.32.0",
+    # Optional LLM integrations (install as extras):
+    # pip install agentfactory[gemini]  -> langchain-google-genai
+    # pip install agentfactory[openai]  -> langchain-openai
+    # pip install agentfactory[anthropic] -> langchain-anthropic
+    # pip install agentfactory[langfuse] -> langfuse
+    # pip install agentfactory[search] -> langchain-community duckduckgo-search
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+    "black>=24.0",
+    "ruff>=0.4.0",
+]
+gemini = ["langchain-google-genai>=2.0"]
+openai = ["langchain-openai>=0.2.0"]
+anthropic = ["langchain-anthropic>=0.2.0"]
+langfuse = ["langfuse>=2.0"]
+search = ["langchain-community>=0.3.0", "duckduckgo-search>=6.0"]
+all = [
+    "langchain-google-genai>=2.0",
+    "langchain-openai>=0.2.0",
+    "langchain-anthropic>=0.2.0",
+    "langfuse>=2.0",
+    "langchain-community>=0.3.0",
+    "duckduckgo-search>=6.0",
+]
+
+[project.scripts]
+agentfactory = "agentfactory.cli:cli"
+
+[project.urls]
+Homepage = "https://github.com/aaqarchitect/agentfactory"
+Documentation = "https://github.com/aaqarchitect/agentfactory/tree/main/docs"
+Repository = "https://github.com/aaqarchitect/agentfactory"
+Issues = "https://github.com/aaqarchitect/agentfactory/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agentfactory*"]
+
+[tool.setuptools.package-data]
+agentfactory = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
+ignore = ["E501"]  # Line too long — handled by black

@@ -1,0 +1,92 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+!.env.example
+.env.local
+.env.*.local
+
+# Langfuse cache
+.langfuse/
+
+# SQLite databases
+*.db
+*.db-journal
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# MCP
+.mcp/
+
+# Local agent configs (user-specific)
+agents/my_agent.yaml
+agents/local_*.yaml
+
+# Agent execution artifacts
+.agentfactory/
+agentfactory_state/
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+[Thumbs.db]
+[:Thumbs.db:]
+[~]*
+
+# JetBrains
+.idea/
+.vscode/
+
+#local-docs
+context
+claude

@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "python",
+      "args": [
+        "-m",
+        "mcp.server.filesystem"
+      ],
+      "env": {
+        "FILESYSTEM_BASE_PATH": "/path/to/base"
+      },
+      "description": "Filesystem MCP server for file operations"
+    },
+    "git": {
+      "command": "python",
+      "args": [
+        "-m",
+        "mcp.server.git"
+      ],
+      "description": "Git MCP server for repository operations"
+    }
+  }
+}
