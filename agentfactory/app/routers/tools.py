@@ -32,19 +32,35 @@ router = APIRouter(tags=["tools"], dependencies=[Depends(get_current_user)])
 
 _SAFETY_LEVELS = {s.value for s in SafetyLevel}
 
+import re
+
+_ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validate_env_name(value: str) -> str:
+    """Validate an env var name for the allowlist."""
+    value = value.strip()
+    if not _ENV_NAME_RE.match(value):
+        raise HTTPException(status_code=422, detail=f"Invalid env var name: {value!r}")
+    return value
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
 def _registration_payload(row) -> dict:
-    """Serialize a registration row, decoding metadata JSON (never the code)."""
+    """Serialize a registration row, decoding metadata + env_allow JSON (never the code)."""
     data = dict(row)
     data.pop("code", None)
     try:
         data["metadata"] = json.loads(data.get("metadata") or "{}")
     except (json.JSONDecodeError, TypeError):
         data["metadata"] = {}
+    try:
+        data["env_allow"] = json.loads(data.get("env_allow") or "[]")
+    except (json.JSONDecodeError, TypeError):
+        data["env_allow"] = []
     return data
 
 
@@ -91,6 +107,7 @@ class CustomToolCreate(BaseModel):
     safety_level: str = Field(default="safe")
     cost_per_call_usd: float = Field(default=0.0, ge=0.0)
     tags: List[str] = Field(default_factory=list)
+    env_allow: List[str] = Field(default_factory=list)
     function_name: Optional[str] = None
     enabled: bool = True
 
@@ -117,6 +134,7 @@ class CustomToolUpdate(BaseModel):
     safety_level: Optional[str] = None
     cost_per_call_usd: Optional[float] = Field(default=None, ge=0.0)
     tags: Optional[List[str]] = None
+    env_allow: Optional[List[str]] = None
     function_name: Optional[str] = None
     enabled: Optional[bool] = None
 
@@ -184,16 +202,17 @@ def create_tool(
         "function_name": result.function_name,
         "schema": result.schema,
     }
+    env_allow = [_validate_env_name(v) for v in payload.env_allow]
 
     conn = db.get_db()
     try:
         conn.execute(
             """
-            INSERT INTO tool_registrations (id, workspace_id, name, source, code, metadata, enabled, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tool_registrations (id, workspace_id, name, source, code, metadata, env_allow, enabled, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (tool_id, workspace["id"], payload.name, "custom", payload.code,
-             json.dumps(metadata), 1 if payload.enabled else 0, now),
+             json.dumps(metadata), json.dumps(env_allow), 1 if payload.enabled else 0, now),
         )
         conn.commit()
         row = conn.execute("SELECT * FROM tool_registrations WHERE id = ?", (tool_id,)).fetchone()
@@ -255,6 +274,8 @@ def update_tool(
         meta["cost_per_call_usd"] = payload.cost_per_call_usd
     if payload.tags is not None:
         meta["tags"] = payload.tags
+    if payload.env_allow is not None:
+        set_field("env_allow", json.dumps([_validate_env_name(v) for v in payload.env_allow]))
     if payload.function_name is not None:
         meta["function_name"] = payload.function_name
     if payload.enabled is not None:

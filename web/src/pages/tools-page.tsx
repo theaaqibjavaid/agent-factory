@@ -162,6 +162,7 @@ function ToolEditorDialog({
   const [description, setDescription] = useState<string>(meta.description ?? "");
   const [category, setCategory] = useState<string>(meta.category ?? "custom");
   const [safety, setSafety] = useState<string>(meta.safety_level ?? "safe");
+  const [envAllow, setEnvAllow] = useState<string>((existing?.env_allow ?? []).join(", "));
   const [code, setCode] = useState<string>(existing ? "" : SAMPLE_CODE);
   const [functionName, setFunctionName] = useState<string>(meta.function_name ?? "");
   const [validation, setValidation] = useState<ValidationResult | null>(null);
@@ -202,6 +203,7 @@ function ToolEditorDialog({
       code,
       category,
       safety_level: safety,
+      env_allow: envAllow.split(",").map((s) => s.trim()).filter(Boolean),
       function_name: functionName || null,
     };
     try {
@@ -253,6 +255,9 @@ function ToolEditorDialog({
             </Select>
           </Field>
         </div>
+        <Field label="Env allowlist" hint="Comma-separated env var names the tool may read via os.environ.">
+          <Input value={envAllow} onChange={(e) => setEnvAllow(e.target.value)} placeholder="API_TOKEN, REGION" />
+        </Field>
         <Field label="Code" hint="Runs in a sandbox: safe stdlib imports only (re, json, urllib…), no subprocess/socket/eval. DESTRUCTIVE tools stay gated by the runtime.">
           <Textarea
             rows={12}

@@ -104,6 +104,11 @@ export function SkillsPage() {
                     {skill.metadata.instructions}
                   </p>
                 )}
+                {skill.metadata.dependencies && skill.metadata.dependencies.length > 0 && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Depends on: {skill.metadata.dependencies.join(", ")}
+                  </p>
+                )}
                 <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
                   <Button
                     size="sm"
@@ -147,6 +152,7 @@ function CreateSkillDialog({
   const [description, setDescription] = useState("");
   const [instructions, setInstructions] = useState("");
   const [category, setCategory] = useState("research");
+  const [dependencies, setDependencies] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -160,6 +166,7 @@ function CreateSkillDialog({
         instructions,
         category,
         tools: [],
+        dependencies: dependencies.split(",").map((s) => s.trim()).filter(Boolean),
       });
       onCreated();
     } catch (err) {
@@ -191,6 +198,9 @@ function CreateSkillDialog({
               <option key={c} value={c}>{c}</option>
             ))}
           </Select>
+        </Field>
+        <Field label="Dependencies" hint="Comma-separated skill names this skill builds on — injected before it in the prompt.">
+          <Input value={dependencies} onChange={(e) => setDependencies(e.target.value)} placeholder="e.g. research-notes, writing-style" />
         </Field>
         {error && (
           <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>

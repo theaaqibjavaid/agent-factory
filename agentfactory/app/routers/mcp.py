@@ -141,6 +141,10 @@ class MCPTestRequest(BaseModel):
     timeout: float = Field(default=10.0, ge=1.0, le=120.0)
 
 
+class MCPToolEnablement(BaseModel):
+    enablement: Dict[str, bool] = Field(..., description="tool name -> enabled")
+
+
 @router.get("/workspaces/{workspace_id}/mcp")
 def list_servers(workspace: dict = Depends(get_current_workspace)):
     """List MCP servers in the workspace."""
@@ -176,6 +180,115 @@ async def test_connection(payload: MCPTestRequest, workspace: dict = Depends(get
     except Exception as e:  # noqa: BLE001 — surface connection errors to the UI
         return {"ok": False, "error": str(e), "tools": []}
     return {"ok": True, "tools": tools, "count": len(tools)}
+
+
+@router.get("/workspaces/{workspace_id}/mcp/{server_id}/tools")
+def list_server_tools(server_id: str, workspace: dict = Depends(get_current_workspace)):
+    """Discovered tools for a saved server, with per-tool enabled flags."""
+    existing = _get_server(workspace["id"], server_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="MCP server not found")
+    meta = json.loads(existing.get("metadata") or "{}")
+    enabled = meta.get("enabled_tools") or {}
+    tools = []
+    for t in meta.get("tools") or []:
+        tools.append({**t, "enabled": bool(enabled.get(t["name"], True))})
+    return {"tools": tools, "refreshed_at": meta.get("refreshed_at")}
+
+
+@router.post("/workspaces/{workspace_id}/mcp/{server_id}/refresh-tools")
+async def refresh_tools(
+    server_id: str,
+    workspace: dict = Depends(require_workspace_role("owner", "admin")),
+):
+    """
+    Probe a saved server and persist the discovered tool list (Phase 4.3).
+
+    Existing per-tool enablement is preserved; newly discovered tools default
+    to enabled. The result is stored in the server's metadata so the agent
+    editor can render per-tool toggles.
+    """
+    existing = _get_server(workspace["id"], server_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="MCP server not found")
+    if existing.get("transport") != "stdio":
+        raise HTTPException(status_code=422, detail="SSE transport probing is not supported yet")
+    if not existing.get("command"):
+        raise HTTPException(status_code=422, detail="Server has no command to run")
+
+    try:
+        args = json.loads(existing.get("args") or "[]")
+    except json.JSONDecodeError:
+        args = []
+    try:
+        env_allow = json.loads(existing.get("env_allow") or "[]")
+    except json.JSONDecodeError:
+        env_allow = []
+
+    config = MCPServerConfig(
+        name=existing["name"],
+        command=existing["command"],
+        args=args,
+        env={k: os.environ[k] for k in env_allow if k in os.environ},
+        timeout=float(existing.get("timeout") or 10.0),
+    )
+    try:
+        tools = await _probe(config)
+    except Exception as e:  # noqa: BLE001 — surface connection errors to the UI
+        return {"ok": False, "error": str(e), "tools": []}
+
+    meta = json.loads(existing.get("metadata") or "{}")
+    if not isinstance(meta, dict):
+        meta = {}
+    previous = meta.get("enabled_tools") or {}
+    meta["tools"] = tools
+    meta["enabled_tools"] = {t["name"]: bool(previous.get(t["name"], True)) for t in tools}
+    meta["refreshed_at"] = _now_iso()
+
+    conn = db.get_db()
+    try:
+        conn.execute(
+            "UPDATE mcp_servers SET metadata = ? WHERE id = ? AND workspace_id = ?",
+            (json.dumps(meta), server_id, workspace["id"]),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True, "tools": tools, "enabled_tools": meta["enabled_tools"]}
+
+
+@router.patch("/workspaces/{workspace_id}/mcp/{server_id}/tools")
+def update_tool_enablement(
+    server_id: str,
+    payload: MCPToolEnablement,
+    workspace: dict = Depends(require_workspace_role("owner", "admin")),
+):
+    """Toggle which discovered MCP tools an agent may call (per-tool enablement)."""
+    existing = _get_server(workspace["id"], server_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="MCP server not found")
+    meta = json.loads(existing.get("metadata") or "{}")
+    if not isinstance(meta, dict):
+        meta = {}
+    known = {t["name"] for t in (meta.get("tools") or [])}
+    for name in payload.enablement:
+        if name not in known:
+            raise HTTPException(status_code=422, detail=f"Unknown tool '{name}' — refresh the server first")
+    enabled = meta.get("enabled_tools") or {}
+    enabled.update(payload.enablement)
+    meta["enabled_tools"] = enabled
+
+    conn = db.get_db()
+    try:
+        conn.execute(
+            "UPDATE mcp_servers SET metadata = ? WHERE id = ? AND workspace_id = ?",
+            (json.dumps(meta), server_id, workspace["id"]),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    tools = [{**t, "enabled": bool(enabled.get(t["name"], True))} for t in (meta.get("tools") or [])]
+    return {"tools": tools}
 
 
 @router.post("/workspaces/{workspace_id}/mcp", status_code=201)

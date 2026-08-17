@@ -22,7 +22,7 @@ import builtins
 import json
 import os
 import types
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from agentfactory.base_tools import SafetyLevel, ToolDef
 
@@ -43,13 +43,55 @@ class CustomToolError(RuntimeError):
     """Raised when custom tool code fails to load or execute."""
 
 
-def _sandbox_builtins() -> Dict[str, Any]:
+class _EnvView:
+    """Read-only view over a fixed set of env vars (the tool's allowlist)."""
+
+    def __init__(self, allowlist: List[str]) -> None:
+        self._vars = {k: os.environ[k] for k in allowlist if k in os.environ}
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._vars.get(key, default)
+
+    def __getitem__(self, key: str) -> Any:
+        return self._vars[key]
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._vars
+
+    def __iter__(self):
+        return iter(self._vars)
+
+    def keys(self):
+        return self._vars.keys()
+
+    def items(self):
+        return self._vars.items()
+
+    def __len__(self) -> int:
+        return len(self._vars)
+
+    def __repr__(self) -> str:
+        return f"_EnvView({sorted(self._vars)!r})"
+
+
+class _RestrictedOS(types.ModuleType):
+    """os module shim for the sandbox: only ``environ`` (allowlisted) works."""
+
+    def __init__(self, allowlist: List[str]) -> None:
+        super().__init__("os")
+        self.environ = _EnvView(allowlist)
+
+    def __getattr__(self, name: str) -> Any:
+        raise CustomToolError(f"os.{name} is not allowed in custom tool sandbox (only os.environ)")
+
+
+def _sandbox_builtins(import_hook) -> Dict[str, Any]:
     """Build a builtins namespace without import/eval/file-write primitives."""
     safe: Dict[str, Any] = {}
     for name in _SAFE_BUILTINS:
         if hasattr(builtins, name):
             safe[name] = getattr(builtins, name)
-    safe["__import__"] = _deny_import
+    safe["__import__"] = import_hook
     safe["eval"] = _deny
     safe["exec"] = _deny
     safe["open"] = _deny
@@ -77,17 +119,30 @@ _ALLOWED_MODULES = {
 _ALLOWED_MODULE_CACHE: Dict[str, Any] = {}
 
 
-def _deny_import(name: str, *args: Any, **kwargs: Any) -> Any:
-    root = name.split(".")[0]
-    if root not in _ALLOWED_MODULES:
-        raise CustomToolError(
-            f"Importing '{root}' is not allowed in custom tool sandbox (allowlist: stdlib compute/read-only modules)"
-        )
-    if root not in _ALLOWED_MODULE_CACHE:
-        import importlib
+def _make_import_hook(env_allow: List[str]):
+    """
+    Build a per-tool ``__import__`` hook.
 
-        _ALLOWED_MODULE_CACHE[root] = importlib.import_module(root)
-    return _ALLOWED_MODULE_CACHE[root]
+    ``os`` resolves to a restricted shim exposing only the allowlisted env
+    vars (Phase 4.1 env allowlist); every other attribute raises. Everything
+    else goes through the stdlib compute/read-only allowlist.
+    """
+
+    def _deny_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        root = name.split(".")[0]
+        if root == "os":
+            return _RestrictedOS(env_allow)
+        if root not in _ALLOWED_MODULES:
+            raise CustomToolError(
+                f"Importing '{root}' is not allowed in custom tool sandbox (allowlist: stdlib compute/read-only modules + os.environ)"
+            )
+        if root not in _ALLOWED_MODULE_CACHE:
+            import importlib
+
+            _ALLOWED_MODULE_CACHE[root] = importlib.import_module(root)
+        return _ALLOWED_MODULE_CACHE[root]
+
+    return _deny_import
 
 
 def load_custom_tool(
@@ -95,12 +150,17 @@ def load_custom_tool(
     tool_name: str,
     function_name: Optional[str] = None,
     workspace_root: Optional[str] = None,
+    env_allow: Optional[List[str]] = None,
 ) -> ToolDef:
     """
     Compile + exec custom tool code and return a ``ToolDef`` for it.
 
     The returned ToolDef's ``func`` is the exported function; metadata is
     filled in by the caller (registration row) or defaults to SAFE + $0.
+
+    ``env_allow`` is the list of env var names the tool may read through
+    ``os.environ`` (Phase 4.1 env allowlist). Everything else on ``os`` is
+    denied; with no allowlist, ``os.environ`` is empty.
     """
     if not code or not code.strip():
         raise CustomToolError("Custom tool code is empty")
@@ -112,7 +172,7 @@ def load_custom_tool(
     module = types.ModuleType(module_name)
     module.__file__ = os.path.join(sandbox_dir, f"{tool_name}.py")
     module.__name__ = module_name
-    module.__builtins__ = _sandbox_builtins()
+    module.__builtins__ = _sandbox_builtins(_make_import_hook(env_allow or []))
 
     try:
         compiled = compile(code, module.__file__, "exec")
@@ -152,11 +212,19 @@ def tool_def_from_registration(row: Dict[str, Any], workspace_root: Optional[str
     if not code:
         return None
 
+    try:
+        env_allow = json.loads(row.get("env_allow") or "[]")
+    except (json.JSONDecodeError, TypeError):
+        env_allow = []
+    if not isinstance(env_allow, list):
+        env_allow = []
+
     tool_def = load_custom_tool(
         code,
         row["name"],
         function_name=meta.get("function_name"),
         workspace_root=workspace_root,
+        env_allow=env_allow,
     )
 
     # Metadata comes from the registration row — never from the code.

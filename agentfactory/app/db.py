@@ -130,6 +130,7 @@ CREATE TABLE IF NOT EXISTS tool_registrations (
     source       TEXT NOT NULL DEFAULT 'builtin',  -- builtin | custom | marketplace
     code         TEXT,
     metadata     TEXT NOT NULL DEFAULT '{}',
+    env_allow    TEXT NOT NULL DEFAULT '[]',       -- env var names visible to the sandbox (Phase 4.1)
     enabled      INTEGER NOT NULL DEFAULT 1,
     created_at   TEXT NOT NULL
 );
@@ -208,6 +209,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
     proposals_cols = {row[1] for row in conn.execute("PRAGMA table_info(proposals)").fetchall()}
     if "run_id" not in proposals_cols:
         conn.execute("ALTER TABLE proposals ADD COLUMN run_id TEXT REFERENCES agent_runs(id) ON DELETE SET NULL")
+    tool_cols = {row[1] for row in conn.execute("PRAGMA table_info(tool_registrations)").fetchall()}
+    if "env_allow" not in tool_cols:
+        conn.execute("ALTER TABLE tool_registrations ADD COLUMN env_allow TEXT NOT NULL DEFAULT '[]'")
 
 
 def init_db(db_path: Optional[str] = None) -> None:

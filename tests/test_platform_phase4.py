@@ -54,10 +54,16 @@ while True:
         pass
     elif method == "tools/list":
         send({"jsonrpc": "2.0", "id": msg["id"], "result": {"tools": [
-            {"name": "fake_ping", "description": "Replies pong", "inputSchema": {"type": "object", "properties": {}}}
+            {"name": "fake_ping", "description": "Replies pong", "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "fake_echo", "description": "Echoes input text", "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}}}
         ]}})
     elif method == "tools/call":
-        send({"jsonrpc": "2.0", "id": msg["id"], "result": {"content": [{"type": "text", "text": "pong"}]}})
+        params = msg.get("params", {})
+        if params.get("name") == "fake_echo":
+            text = params.get("arguments", {}).get("text", "")
+            send({"jsonrpc": "2.0", "id": msg["id"], "result": {"content": [{"type": "text", "text": "echo:" + text}]}})
+        else:
+            send({"jsonrpc": "2.0", "id": msg["id"], "result": {"content": [{"type": "text", "text": "pong"}]}})
 '''
 
 _FAKE_MCP_SCRIPT = os.path.join(os.path.dirname(__file__), "_fake_mcp_server.py")
@@ -317,6 +323,78 @@ class TestCustomTools:
         r = client.delete(f"/api/v1/workspaces/{ws}/tools/{tool_id}", headers=_bearer(resp))
         assert r.status_code == 204
 
+    def test_env_allowlist_exposes_only_permitted_vars(self, client, fake_llm, monkeypatch):
+        """A tool with env_allow can read allowlisted vars; others stay invisible (Phase 4.1)."""
+        monkeypatch.setenv("PHASE4_SECRET", "s3cret-value")
+        monkeypatch.setenv("PHASE4_BLOCKED", "must-not-leak")
+        resp = _signup(client)
+        ws = _first_workspace(client, resp)
+
+        code = (
+            "import os\n"
+            "def read_env() -> str:\n"
+            "    secret = os.environ.get('PHASE4_SECRET', 'missing')\n"
+            "    blocked = os.environ.get('PHASE4_BLOCKED', 'missing')\n"
+            "    return secret + '|' + blocked\n"
+        )
+        r = client.post(
+            f"/api/v1/workspaces/{ws}/tools",
+            json={"name": "read_env", "description": "Reads env", "code": code,
+                  "env_allow": ["PHASE4_SECRET"]},
+            headers=_bearer(resp),
+        )
+        assert r.status_code == 201, r.text
+        assert r.json()["env_allow"] == ["PHASE4_SECRET"]
+
+        agent = _create_agent(client, resp, ws, name="Env Agent", tools=["read_env"])
+        fake_llm([
+            {"text": "", "tool_calls": [{"name": "read_env", "arguments": {}}]},
+            {"text": "Done.", "tool_calls": []},
+        ])
+        run, events = _launch_and_drain(client, resp, ws, agent["id"], task="Read env")
+        assert run["status"] == "completed", run.get("error")
+        results = [e["data"]["result"] for e in events if e["event"] == "tool_result"]
+        assert any("s3cret-value|missing" in r for r in results)
+
+    def test_env_allowlist_empty_by_default(self, client, fake_llm, monkeypatch):
+        """Without an allowlist, os.environ is empty — no env vars leak (Phase 4.1)."""
+        monkeypatch.setenv("PHASE4_SECRET", "s3cret-value")
+        resp = _signup(client)
+        ws = _first_workspace(client, resp)
+        code = (
+            "import os\n"
+            "def read_env() -> str:\n"
+            "    return os.environ.get('PHASE4_SECRET', 'missing')\n"
+        )
+        r = client.post(
+            f"/api/v1/workspaces/{ws}/tools",
+            json={"name": "read_env", "description": "Reads env", "code": code},
+            headers=_bearer(resp),
+        )
+        assert r.status_code == 201, r.text
+        assert r.json()["env_allow"] == []
+
+        agent = _create_agent(client, resp, ws, name="Env Agent", tools=["read_env"])
+        fake_llm([
+            {"text": "", "tool_calls": [{"name": "read_env", "arguments": {}}]},
+            {"text": "Done.", "tool_calls": []},
+        ])
+        run, events = _launch_and_drain(client, resp, ws, agent["id"], task="Read env")
+        assert run["status"] == "completed", run.get("error")
+        results = [e["data"]["result"] for e in events if e["event"] == "tool_result"]
+        assert any("missing" in r for r in results)
+
+    def test_env_allowlist_rejects_bad_names(self, client):
+        resp = _signup(client)
+        ws = _first_workspace(client, resp)
+        r = client.post(
+            f"/api/v1/workspaces/{ws}/tools",
+            json={"name": "t", "description": "d", "code": "def t() -> str:\n    return 'x'",
+                  "env_allow": ["BAD NAME!"]},
+            headers=_bearer(resp),
+        )
+        assert r.status_code == 422
+
 
 # --------------------------------------------------------------------------
 # skills (Phase 4.2 exit criterion)
@@ -384,6 +462,77 @@ class TestSkills:
 
         r = client.delete(f"/api/v1/workspaces/{ws}/skills/{skill_id}", headers=_bearer(resp))
         assert r.status_code == 204
+
+    def test_skill_dependencies_resolve_before_skill(self, client):
+        """A dependent skill pulls its dependencies into the prompt, dep first (Phase 4.2)."""
+        resp = _signup(client)
+        ws = _first_workspace(client, resp)
+        client.post(
+            f"/api/v1/workspaces/{ws}/skills",
+            json={"name": "note-taking", "description": "Structured notes",
+                  "instructions": "Take structured notes with headings."},
+            headers=_bearer(resp),
+        )
+        created = client.post(
+            f"/api/v1/workspaces/{ws}/skills",
+            json={"name": "briefing-writer", "description": "Writes briefings",
+                  "instructions": "Write briefings from notes.",
+                  "dependencies": ["note-taking"]},
+            headers=_bearer(resp),
+        )
+        assert created.status_code == 201, created.text
+
+        agent = _create_agent(client, resp, ws, skills=["briefing-writer"])
+        rendered = client.get(
+            f"/api/v1/workspaces/{ws}/agents/{agent['id']}/render", headers=_bearer(resp)
+        ).json()["system_prompt"]
+        assert "note-taking" in rendered and "briefing-writer" in rendered
+        assert rendered.index("note-taking") < rendered.index("briefing-writer")
+
+    def test_skill_dependency_must_exist(self, client):
+        resp = _signup(client)
+        ws = _first_workspace(client, resp)
+        r = client.post(
+            f"/api/v1/workspaces/{ws}/skills",
+            json={"name": "ghost", "description": "Depends on nothing",
+                  "dependencies": ["does-not-exist"]},
+            headers=_bearer(resp),
+        )
+        assert r.status_code == 422
+        assert "does-not-exist" in r.json()["detail"]
+
+    def test_skill_dependency_cycle_renders_safely(self, client):
+        """Mutual skill dependencies must not hang the prompt render (cycle guard)."""
+        # The API rejects cycles at create time (dependency must exist), so seed
+        # a cycle directly in the DB to prove the runtime guard still holds.
+        resp = _signup(client)
+        ws = _first_workspace(client, resp)
+        from agentfactory.app import db as platform_db
+
+        now = "2026-08-17T00:00:00+00:00"
+        conn = platform_db.get_db()
+        try:
+            for sid, name, deps, instr in (
+                ("s-a", "a", ["b"], "A instructions"),
+                ("s-b", "b", ["a"], "B instructions"),
+            ):
+                conn.execute(
+                    """
+                    INSERT INTO skill_registrations (id, workspace_id, name, source, metadata, enabled, created_at)
+                    VALUES (?, ?, ?, 'custom', ?, 1, ?)
+                    """,
+                    (sid, ws, name, json.dumps({"description": name.upper(), "instructions": instr,
+                                                "dependencies": deps}), now),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+        agent = _create_agent(client, resp, ws, skills=["a"])
+        rendered = client.get(
+            f"/api/v1/workspaces/{ws}/agents/{agent['id']}/render", headers=_bearer(resp)
+        ).json()["system_prompt"]
+        assert "A instructions" in rendered and "B instructions" in rendered
 
 
 # --------------------------------------------------------------------------
@@ -463,6 +612,82 @@ class TestMCP:
 
         r = client.delete(f"/api/v1/workspaces/{ws}/mcp/{server_id}", headers=_bearer(resp))
         assert r.status_code == 204
+
+    def _create_fake_server(self, client, resp, ws):
+        created = client.post(
+            f"/api/v1/workspaces/{ws}/mcp",
+            json={"name": "fake", "command": sys.executable, "args": [_FAKE_MCP_SCRIPT], "timeout": 5.0},
+            headers=_bearer(resp),
+        )
+        assert created.status_code == 201, created.text
+        return created.json()["id"]
+
+    def test_refresh_tools_persists_discovery(self, client):
+        """refresh-tools probes a saved server and persists the tool list (Phase 4.3)."""
+        resp = _signup(client)
+        ws = _first_workspace(client, resp)
+        server_id = self._create_fake_server(client, resp, ws)
+
+        r = client.post(
+            f"/api/v1/workspaces/{ws}/mcp/{server_id}/refresh-tools", headers=_bearer(resp)
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["ok"] is True
+        names = {t["name"] for t in body["tools"]}
+        assert names == {"fake_ping", "fake_echo"}
+        assert body["enabled_tools"] == {"fake_ping": True, "fake_echo": True}
+
+        listing = client.get(
+            f"/api/v1/workspaces/{ws}/mcp/{server_id}/tools", headers=_bearer(resp)
+        ).json()
+        assert {t["name"] for t in listing["tools"]} == names
+        assert all(t["enabled"] for t in listing["tools"])
+
+    def test_disabled_mcp_tool_hidden_from_run_manifest(self, client, fake_llm):
+        """Per-tool enablement: a disabled MCP tool never reaches the agent (Phase 4.3)."""
+        resp = _signup(client)
+        ws = _first_workspace(client, resp)
+        server_id = self._create_fake_server(client, resp, ws)
+        client.post(
+            f"/api/v1/workspaces/{ws}/mcp/{server_id}/refresh-tools", headers=_bearer(resp)
+        )
+        r = client.patch(
+            f"/api/v1/workspaces/{ws}/mcp/{server_id}/tools",
+            json={"enablement": {"fake_ping": False}},
+            headers=_bearer(resp),
+        )
+        assert r.status_code == 200
+        by_name = {t["name"]: t["enabled"] for t in r.json()["tools"]}
+        assert by_name == {"fake_ping": False, "fake_echo": True}
+
+        agent = _create_agent(client, resp, ws, name="MCP Agent", mcp_servers=["fake"])
+        fake_llm([{"text": "Nothing to call.", "tool_calls": []}])
+        run, events = _launch_and_drain(client, resp, ws, agent["id"], task="Check manifest")
+        assert run["status"] == "completed", run.get("error")
+        start = next(e for e in events if e["event"] == "run.start")
+        tools = start["data"]["tools"]
+        assert "fake_echo" in tools
+        assert "fake_ping" not in tools
+
+        # Re-enabling restores it for the next run.
+        r = client.patch(
+            f"/api/v1/workspaces/{ws}/mcp/{server_id}/tools",
+            json={"enablement": {"fake_ping": True}},
+            headers=_bearer(resp),
+        )
+        assert r.json()["tools"][0]["enabled"] is True
+
+    def test_enablement_rejects_unknown_tool(self, client):
+        resp = _signup(client)
+        ws = _first_workspace(client, resp)
+        server_id = self._create_fake_server(client, resp, ws)
+        r = client.patch(
+            f"/api/v1/workspaces/{ws}/mcp/{server_id}/tools",
+            json={"enablement": {"not_discovered": False}},
+            headers=_bearer(resp),
+        )
+        assert r.status_code == 422
 
 
 # --------------------------------------------------------------------------

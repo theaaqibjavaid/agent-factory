@@ -222,7 +222,13 @@ def build_tool_registry(agent_row: dict) -> Tuple[ToolRegistry, List[Dict[str, A
 
 
 def _skill_instructions(workspace_id: Optional[str], skill_names: List[str]) -> str:
-    """Resolve skill instructions for the agent's configured skills (Phase 4.2)."""
+    """
+    Resolve skill instructions for the agent's configured skills (Phase 4.2).
+
+    Skill ``dependencies`` are expanded depth-first before the skill itself
+    (deduplicated, cycle-safe) so prerequisite knowledge precedes dependent
+    instructions in the rendered prompt.
+    """
     if not workspace_id or not skill_names:
         return ""
     from agentfactory.app import db
@@ -243,8 +249,26 @@ def _skill_instructions(workspace_id: Optional[str], skill_names: List[str]) -> 
         except (json.JSONDecodeError, TypeError):
             by_name[row["name"]] = {}
 
-    parts = []
+    ordered: List[str] = []
+
+    def resolve(name: str, stack: List[str]) -> None:
+        if name in ordered:
+            return
+        if name in stack:
+            logger.warning("Skill dependency cycle detected", skill=name, chain=stack + [name])
+            return
+        meta = by_name.get(name)
+        if meta is None:
+            return
+        for dep in meta.get("dependencies") or []:
+            resolve(dep, stack + [name])
+        ordered.append(name)
+
     for name in skill_names:
+        resolve(name, [])
+
+    parts = []
+    for name in ordered:
         meta = by_name.get(name, {})
         instructions = meta.get("instructions") or meta.get("description")
         if instructions:
@@ -435,6 +459,14 @@ class PlatformAgentRuntime:
             if not row.get("command"):
                 logger.warning("MCP server has no command", server=name)
                 continue
+            # Per-tool enablement (Phase 4.3): servers store the discovered
+            # tool list + an enablement map in metadata; disabled tools are
+            # never exposed to the agent.
+            try:
+                mcp_meta = json.loads(row.get("metadata") or "{}")
+            except (json.JSONDecodeError, TypeError):
+                mcp_meta = {}
+            enabled_tools = mcp_meta.get("enabled_tools") or {}
             # Env allowlist: only pass through explicitly permitted variables.
             env = {}
             for key in _json_list(row.get("env_allow")):
@@ -457,6 +489,9 @@ class PlatformAgentRuntime:
                 continue
             self._mcp_clients.append(client)
             for info in tools:
+                if enabled_tools.get(info.name, True) is False:
+                    logger.info("MCP tool disabled by workspace", server=name, tool=info.name)
+                    continue
                 self.registry.register_mcp_tool(
                     info.name,
                     info.metadata,

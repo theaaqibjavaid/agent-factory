@@ -47,11 +47,37 @@ def _get_skill(workspace_id: str, skill_id: str) -> Optional[dict]:
         conn.close()
 
 
+def _skill_names(workspace_id: str) -> set:
+    """All skill names registered in the workspace (for dependency validation)."""
+    conn = db.get_db()
+    try:
+        rows = conn.execute(
+            "SELECT name FROM skill_registrations WHERE workspace_id = ?", (workspace_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return {r["name"] for r in rows}
+
+
+def _validate_dependencies(workspace_id: str, name: str, dependencies: List[str]) -> None:
+    """Dependencies must reference other skills in the workspace (no self-deps)."""
+    known = _skill_names(workspace_id)
+    for dep in dependencies:
+        if dep == name:
+            raise HTTPException(status_code=422, detail=f"Skill cannot depend on itself: {name}")
+        if dep not in known:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Skill dependency '{dep}' does not exist in this workspace",
+            )
+
+
 class SkillCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     description: str = Field(..., min_length=1, max_length=2000)
     instructions: str = Field(default="", max_length=20000)
     tools: List[str] = Field(default_factory=list)
+    dependencies: List[str] = Field(default_factory=list)
     category: str = Field(default="generic", max_length=60)
     tags: List[str] = Field(default_factory=list)
     enabled: bool = True
@@ -69,6 +95,7 @@ class SkillUpdate(BaseModel):
     description: Optional[str] = None
     instructions: Optional[str] = None
     tools: Optional[List[str]] = None
+    dependencies: Optional[List[str]] = None
     category: Optional[str] = None
     tags: Optional[List[str]] = None
     enabled: Optional[bool] = None
@@ -96,10 +123,12 @@ def create_skill(
     """Create a skill registration."""
     now = _now_iso()
     skill_id = uuid.uuid4().hex
+    _validate_dependencies(workspace["id"], payload.name, payload.dependencies)
     metadata = {
         "description": payload.description,
         "instructions": payload.instructions,
         "tools": payload.tools,
+        "dependencies": payload.dependencies,
         "category": payload.category,
         "tags": payload.tags,
     }
@@ -145,6 +174,9 @@ def update_skill(
         meta["instructions"] = payload.instructions
     if payload.tools is not None:
         meta["tools"] = payload.tools
+    if payload.dependencies is not None:
+        _validate_dependencies(workspace["id"], existing["name"], payload.dependencies)
+        meta["dependencies"] = payload.dependencies
     if payload.category is not None:
         meta["category"] = payload.category
     if payload.tags is not None:
