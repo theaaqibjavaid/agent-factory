@@ -2,7 +2,7 @@
   <h1 align="center">AgentFactory</h1>
   <p align="center">The universal AI agent factory — a Python SDK <em>and</em> a self-hosted Studio for building, running, and operating any AI agent.</p>
   <p align="center">
-    <a href="https://pypi.org/project/agentfactory-studio/"><img src="https://img.shields.io/badge/pypi-v1.1.0-blue?logo=pypi" alt="PyPI version"></a>
+    <a href="https://pypi.org/project/agentfactory-studio/"><img src="https://img.shields.io/pypi/v/agentfactory-studio?logo=pypi" alt="PyPI version"></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
     <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue?logo=python" alt="Python 3.10+"></a>
     <a href="https://github.com/theaaqibjavaid/agent-factory/actions"><img src="https://github.com/theaaqibjavaid/agent-factory/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
