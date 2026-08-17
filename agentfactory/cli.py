@@ -16,6 +16,8 @@ import subprocess
 import structlog
 from pathlib import Path
 
+from agentfactory import __version__
+
 logger = structlog.get_logger()
 
 # Fix encoding for Windows (emoji support)
@@ -29,7 +31,7 @@ if sys.platform == "win32":
 # ============================================================
 
 @click.group()
-@click.version_option(version="1.0.0", prog_name="agentfactory")
+@click.version_option(version=__version__, prog_name="agentfactory")
 def cli():
     """AgentFactory — Universal AI Agent Template System"""
     pass

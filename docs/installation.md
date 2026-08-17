@@ -11,20 +11,20 @@ AgentFactory is distributed as a PyPI package. Install it with pip.
 
 ```bash
 # Core package (LLM integrations are optional extras)
-pip install agentfactory
+pip install agentfactory-studio
 
 # With all LLM providers
-pip install "agentfactory[all]"
+pip install "agentfactory-studio[all]"
 
 # Selective extras
-pip install agentfactory[gemini]      # Google Gemini
-pip install agentfactory[openai]      # OpenAI
-pip install agentfactory[anthropic]   # Anthropic
-pip install agentfactory[langfuse]    # Observability
-pip install agentfactory[search]      # Web search tools
+pip install agentfactory-studio[gemini]      # Google Gemini
+pip install agentfactory-studio[openai]      # OpenAI
+pip install agentfactory-studio[anthropic]   # Anthropic
+pip install agentfactory-studio[langfuse]    # Observability
+pip install agentfactory-studio[search]      # Web search tools
 
 # Development dependencies
-pip install "agentfactory[dev]"
+pip install "agentfactory-studio[dev]"
 ```
 
 ## API Keys
@@ -65,7 +65,7 @@ agentfactory --version
 ## From Source (development)
 
 ```bash
-git clone https://github.com/aaqarchitect/agentfactory
-cd agentfactory
+git clone https://github.com/theaaqibjavaid/agent-factory.git
+cd agent-factory
 pip install -e ".[dev]"
 ```

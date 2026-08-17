@@ -52,7 +52,7 @@ volumes:
 
 ```bash
 # 1. Install the package with the platform extra (uvicorn[standard]: websockets/uvloop)
-pip install 'agentfactory[platform]'
+pip install 'agentfactory-studio[platform]'
 
 # 2. Build the Studio SPA once
 cd web

@@ -1,120 +1,230 @@
-# AgentFactory
+<p align="center">
+  <h1 align="center">AgentFactory</h1>
+  <p align="center">The universal AI agent factory — a Python SDK <em>and</em> a self-hosted Studio for building, running, and operating any AI agent.</p>
+  <p align="center">
+    <a href="https://pypi.org/project/agentfactory-studio/"><img src="https://img.shields.io/badge/pypi-v1.1.0-blue?logo=pypi" alt="PyPI version"></a>
+    <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+    <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue?logo=python" alt="Python 3.10+"></a>
+    <a href="https://github.com/theaaqibjavaid/agent-factory/actions"><img src="https://github.com/theaaqibjavaid/agent-factory/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+    <a href="https://github.com/theaaqibjavaid/agent-factory/actions"><img src="https://img.shields.io/badge/Coverage-85%25-yellow" alt="Coverage"></a>
+    <a href="https://github.com/theaaqibjavaid/agent-factory/blob/main/docs/SUMMARY.md"><img src="https://img.shields.io/badge/Docs-Summary-orange" alt="Docs"></a>
+    <a href="https://github.com/theaaqibjavaid/agent-factory/blob/main/CODE_OF_CONDUCT.md"><img src="https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg" alt="Code of Conduct"></a>
+  </p>
+</p>
 
-[![PyPI version](https://img.shields.io/pypi/v/agentfactory?logo=pypi)](https://pypi.org/project/agentfactory/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://www.python.org/downloads/)
-[![CI](https://github.com/theaaqibjavaid/agent-factory/actions/workflows/ci.yml/badge.svg)](https://github.com/theaaqibjavaid/agent-factory/actions)
-[![Coverage](https://img.shields.io/badge/Coverage-84%25-yellow)](https://github.com/theaaqibjavaid/agent-factory/actions)
-[![Docs](https://img.shields.io/badge/Docs-Summary-orange)](https://github.com/theaaqibjavaid/agent-factory/blob/main/docs/SUMMARY.md)
+AgentFactory is a configuration-driven **Agent OS**: instead of writing a new
+codebase for every agent you need, you define an agent's identity, tools, and
+rules as data and the same engine brings it to life — a software engineer, a
+research analyst, a customer assistant, anything.
 
-AgentFactory is a universal, open-source Python SDK — and a full Studio platform — for building and operating production-grade AI agents of any type.
-
-A single `pip install agentfactory[platform]` gives you the SDK (LLM failover, persistent memory, native tool calling, streaming, skill marketplace, human-in-the-loop approvals) **plus** a multi-user Studio: sign up, build agents with custom tools/skills/MCP servers, run them with full observability, and operate them from a built-in terminal.
+- **SDK** — one `pip install` gives you LLM failover, persistent memory, native
+  tool calling, streaming, skills, MCP, and human-in-the-loop approvals.
+- **Studio** — a self-hosted multi-user dashboard: sign up, build agents,
+  install tools/skills/MCP servers, run with full observability, and operate
+  from a built-in terminal.
 
 ---
 
-## Studio (self-hosted dashboard)
+## Table of Contents
+
+- [✨ Features](#-features)
+- [🚀 Quick Start](#-quick-start)
+- [🧩 SDK Usage](#-sdk-usage)
+- [🖥️ CLI Reference](#️-cli-reference)
+- [🏗️ Architecture](#️-architecture)
+- [🛡️ Security](#️-security)
+- [📚 Documentation](#-documentation)
+- [🤝 Contributing](#-contributing)
+- [📄 License](#-license)
+
+---
+
+## ✨ Features
+
+**Engine**
+
+| | |
+|---|---|
+| 🧠 **Universal agent template** | One engine, any agent — identity, tools, and rules are configuration, not code |
+| 🔁 **LLM failover pipeline** | Gemini → OpenAI → Anthropic with per-call failover and USD budget control |
+| 💾 **Persistent memory** | SQLite-backed conversation history + key-value facts, export/import bundles |
+| ⚡ **Streaming output** | Async generators for text and tool calls |
+| 🛠️ **Tool system** | Built-ins, `@tool` decorator, and validated custom Python tools in a sandbox |
+| 🧩 **Skill marketplace** | Load skills from packages, directories, or the Studio marketplace |
+| 🔌 **MCP support** | Model Context Protocol servers with command/env allowlists and per-tool toggles |
+| ✅ **Verifier** | Post-execution checks with failing-line context pruning and audit reports |
+| 📚 **Feedback learning** | `learn_from_correction()` for continuous self-improvement |
+
+**Studio platform**
+
+| | |
+|---|---|
+| 👥 **Multi-user auth** | Signup/login (argon2id), JWT rotation, workspaces, roles |
+| 🤖 **Agent studio** | Build agents with constitution rules and autonomy guardrails |
+| 🚀 **Streaming runs** | SSE event stream per run, retries, per-agent daily budgets |
+| ✋ **Human-in-the-loop** | Gate mode, proposal inbox, Discord/Gmail/webhook notifications |
+| 🧪 **Custom tools** | Compile + AST-validated code with per-tool env allowlists |
+| 🏪 **Marketplace** | Curated tools/skills/MCP catalog with trust indicators + audit trail |
+| 📊 **Observability** | Run events, cost/token dashboards, budget alerts (80% / 100%) |
+| 🖥️ **Terminal** | In-browser PTY shell with destructive-command confirmation |
+| 🛡️ **Guardrails** | Protected branches, path allowlists, constitutional rules |
+
+---
+
+## 🚀 Quick Start
+
+### Option A — Self-host the Studio (full experience)
 
 ```bash
-# SDK + platform extra (API server), then build the UI and run one process:
-pip install 'agentfactory[platform]'
+# Docker (recommended — one container serves API + UI + worker)
+docker build -t agentfactory .
+docker run -d -p 8000:8000 \
+  -e AGENTFACTORY_JWT_SECRET="$(openssl rand -hex 32)" \
+  -v agentfactory-data:/data \
+  agentfactory
+```
+
+```bash
+# …or bare metal
+pip install 'agentfactory-studio[platform]'
 cd web && bun install && bun run build && cd ..
 AGENTFACTORY_SPA_DIR="$(pwd)/web/dist" AGENTFACTORY_JWT_SECRET="$(openssl rand -hex 32)" \
   uvicorn agentfactory.app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Open `http://localhost:8000`, sign up, and you get: agents (constitution +
-guardrails), custom tools (validated + sandboxed with env allowlists), skills
-(with dependency resolution), MCP servers (per-tool enablement), model
-connections (bring-your-own key), a marketplace, a PTY terminal, cost/token
-dashboards with budget alerts, and Discord/Gmail/webhook notifications.
+Open **http://localhost:8000**, sign up, and you're in the Studio: create an
+agent, add tools/skills/MCP servers and a model connection with your own API
+key, run a task, and watch it stream — with budget alerts and full observability.
 
-Docker one-liner and the production checklist: [docs/self-host.md](docs/self-host.md).
-Migrating an existing v1 deployment: [docs/migration-v1-v2.md](docs/migration-v1-v2.md).
+> **PyPI note:** the distribution publishes as `agentfactory-studio` because the
+> bare `agentfactory` name is squatted on PyPI (placeholder `0.0.0` release by
+> another author). The Python import package remains `agentfactory`. Until the
+> first PyPI release, install from source:
+> `pip install git+https://github.com/theaaqibjavaid/agent-factory.git`.
 
----
+### Option B — SDK only
 
-## Key Features
-
-| Feature | Description |
-|---------|-------------|
-| Universal Template | Powers any agent type engineers, researchers, analysts, assistants |
-| LLM Failover Pipeline | Gemini (free) to OpenAI to Anthropic with USD budget control |
-| Persistent Memory | SQLite-backed conversation history + key-value facts across sessions |
-| Streaming LLM Output | Real-time async generators for text and tool calls |
-| Native Tool Calling | LangChain bind_tools() integration |
-| Skill Marketplace | Dynamic skill loading from pip packages or local directories |
-| MCP Integration | Model Context Protocol server discovery and tool registration |
-| JWT Authentication | Production-grade auth on the approval server |
-| Feedback Learning | learn_from_correction() for agent self-improvement |
-| Human-in-the-Loop | FastAPI approval server with Discord/Gmail notifications |
-| Safety Levels | @tool decorator with SAFE / MODIFIED / DESTRUCTIVE classification |
-| Studio Platform | Multi-user API + dashboard: agents, runs, tools, skills, MCP, models |
-| Custom Tools | Validated Python tools in a sandbox with per-tool env allowlists |
-| Terminal | PTY shell in the browser with destructive-command confirmation |
-| Observability | Run events, cost/token dashboards, daily budget alerts (80%/100%) |
-| Autonomy Guardrails | Per-agent constitution, protected branches, path allowlists |
-| Marketplace | Curated tools/skills/MCP catalog with trust indicators + audit trail |
-| Production Packaging | PEP 561 compliant, pyproject.toml, CLI entry points, Dockerfile |
-
----
-
-## Installation
-
-```
-pip install agentfactory
-```
-
-Optional: pip install agentfactory[all] for all LLM providers.
-
----
-
-## Quick Start
-
-```
-cp .env.example .env
-# Edit .env with your API keys
-
+```bash
+pip install agentfactory-studio[all]   # all LLM providers
 agentfactory init
 agentfactory run
 ```
 
+See [docs/quick-start.md](docs/quick-start.md) and [docs/self-host.md](docs/self-host.md).
+
 ---
 
-## Programmatic Usage
+## 🧩 SDK Usage
+
+```python
+import asyncio
+from agentfactory import AgentFactory
+
+async def main():
+    factory = AgentFactory()
+    agent = factory.create_agent("Senior")
+    result = await agent.run("Implement user authentication")
+    print(result)
+
+asyncio.run(main())
+```
+
+Custom tools, skills, MCP servers, and memory integrate through the registry —
+see the [API reference](docs/api-reference.md) and [tool system](docs/tools.md).
+
+---
+
+## 🖥️ CLI Reference
+
+| Command | Description |
+|---|---|
+| `agentfactory init` | Scaffold a project + `.env` |
+| `agentfactory run` | Run the default agent |
+| `agentfactory create-agent` | Add an agent profile |
+| `agentfactory list-tools` | List registered tools |
+| `agentfactory status` | Check the approval server |
+| `agentfactory token` | Mint a local JWT (v1 approval server) |
+
+Full reference: [docs/cli-reference.md](docs/cli-reference.md).
+
+---
+
+## 🏗️ Architecture
 
 ```
-from agentfactory import AgentFactory, Skill
-
-factory = AgentFactory()
-agent = factory.create_agent("Senior")
-result = await agent.run("Implement user authentication")
+┌────────────────────────────────────────────────────────────────┐
+│                        Studio (web/)                           │
+│  Dashboard · Agent editor · Tools/Skills/MCP · Terminal ·      │
+│  Observability · Approvals · Settings                          │
+└──────────────────────────────┬─────────────────────────────────┘
+                               │ HTTP / SSE / WebSocket
+┌──────────────────────────────▼─────────────────────────────────┐
+│                 Platform API (agentfactory/app)                │
+│  Auth · Workspaces · Agents · Runs · Proposals · Memories ·    │
+│  Tools · Skills · MCP · Models · Marketplace · Terminal ·      │
+│  Observability        (SQLite, argon2id, JWT rotation)         │
+└──────────────────────────────┬─────────────────────────────────┘
+                               │ in-process worker + run broker
+┌──────────────────────────────▼─────────────────────────────────┐
+│                    Runtime (agentfactory/runtime.py)            │
+│  LLM failover · tool sandbox · skills · MCP attach ·           │
+│  constitution · guardrails · budget alerts · notifications     │
+└────────────────────────────────────────────────────────────────┘
 ```
 
----
-
-## Documentation
-
-Full index: docs/SUMMARY.md
-
-- Self-Host Studio: docs/self-host.md
-- Migrate v1 → v2: docs/migration-v1-v2.md
-- Architecture: docs/architecture.md
-- Quick Start: docs/quick-start.md
-- CLI Reference: docs/cli-reference.md
-- Persistent Memory: docs/memory.md
-- Skills: docs/skills.md
-- LLM Failover: docs/llm-failover.md
-- Approval Server: docs/approval-server.md
-- MCP Integration: docs/mcp-integration.md
-- Feedback Learning: docs/feedback-learning.md
-- API Reference: docs/api-reference.md
-- Environment Variables: docs/env-vars.md
-- Production Audit: docs/AUDIT.md
-- Security (incl. test plan): docs/security.md
+More: [docs/architecture.md](docs/architecture.md), [docs/design.md](docs/design.md).
 
 ---
 
-## License
+## 🛡️ Security
 
-MIT
+Security is a first-class concern: argon2id password hashing, JWT rotation
+with revocation, per-IP rate limiting on auth, validated + sandboxed custom
+tool execution, MCP command/env allowlists, destructive-command guards, path
+allowlists, and an automated security pipeline (bandit, pip-audit, mypy,
+coverage gate) in CI.
+
+- Threat model + test plan: [docs/security.md](docs/security.md)
+- Reporting vulnerabilities: [SECURITY.md](SECURITY.md)
+
+---
+
+## 📚 Documentation
+
+Full index: [docs/SUMMARY.md](docs/SUMMARY.md)
+
+| Area | Doc |
+|---|---|
+| 🏠 Self-hosting (Docker, env vars, TLS) | [docs/self-host.md](docs/self-host.md) |
+| 🔄 Migrating v1 → v2 | [docs/migration-v1-v2.md](docs/migration-v1-v2.md) |
+| 🧠 Architecture | [docs/architecture.md](docs/architecture.md) |
+| 🚀 Quick start | [docs/quick-start.md](docs/quick-start.md) |
+| 🛠️ Tools & skills | [docs/tools.md](docs/tools.md) · [docs/skills.md](docs/skills.md) |
+| 🔌 MCP | [docs/mcp-integration.md](docs/mcp-integration.md) |
+| 🔁 LLM failover | [docs/llm-failover.md](docs/llm-failover.md) |
+| 💾 Memory | [docs/memory.md](docs/memory.md) |
+| 📡 API reference | [docs/api-reference.md](docs/api-reference.md) |
+| ⚙️ Environment variables | [docs/env-vars.md](docs/env-vars.md) |
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions of all kinds — code, docs, issues, and feedback.
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — dev setup, testing rules, PR workflow
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community standards
+- [CHANGELOG.md](CHANGELOG.md) — release history
+- [SECURITY.md](SECURITY.md) — reporting vulnerabilities
+
+Every PR runs the full gate in CI: tests + coverage ≥ 80%, mypy, ruff,
+bandit, pip-audit, and the Studio build.
+
+⭐ If AgentFactory helps you build something, star the repo — it tells us the
+work matters and helps others find it.
+
+---
+
+## 📄 License
+
+[MIT](LICENSE) © 2026 AgentFactory Contributors

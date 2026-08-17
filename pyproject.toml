@@ -3,9 +3,12 @@ requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agentfactory"
+# NOTE: the import package stays `agentfactory`; only the distribution name
+# is `agentfactory-studio` because the bare `agentfactory` name is taken on
+# PyPI (squatted with a placeholder 0.0.0 release).
+name = "agentfactory-studio"
 version = "1.1.0"
-description = "Universal AI Agent Factory with multi-repo dev team"
+description = "Universal AI Agent Factory: SDK + self-hosted Studio for building and operating any AI agent"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"  # SPDX expression (PEP 639)

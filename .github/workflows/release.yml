@@ -42,6 +42,6 @@ jobs:
       - name: Verify the published version
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          pip install --index-url https://pypi.org/simple/ --quiet --force-reinstall "agentfactory==${TAG}"
+          pip install --index-url https://pypi.org/simple/ --quiet --force-reinstall "agentfactory-studio==${TAG}"
           python -c "import agentfactory; assert agentfactory.__version__ == '${TAG}', (agentfactory.__version__, '${TAG}')"
-          echo "Published agentfactory ${TAG} verified on PyPI."
+          echo "Published agentfactory-studio ${TAG} verified on PyPI."

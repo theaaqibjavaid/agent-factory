@@ -15,7 +15,7 @@ Product Requirements Document. **Status:** Draft v0.1 (post-audit). **Owner:** P
 - **G3** Give users full model freedom: connect first-party providers with an API key, or add any OpenAI-compatible custom endpoint.
 - **G4** Make memory a user-facing asset: browse, manage, export, and import facts + history per agent.
 - **G5** Support full agentic autonomy with a *user-controlled* human-in-the-loop switch (on/off per agent), budget caps, and destructive-action gates.
-- **G6** Keep the product installable by anyone: `pip install agentfactory` + CLI remains a first-class path; the dashboard is one optional layer.
+- **G6** Keep the product installable by anyone: `pip install agentfactory-studio` + CLI remains a first-class path; the dashboard is one optional layer.
 - **G7** Personalization: themes, fonts, and profile/workspace settings.
 
 ## 3. Non-Goals (v1)
@@ -115,7 +115,7 @@ Priorities: **P0** (launch-blocking), **P1** (shortly after launch), **P2** (lat
 
 | ID | Priority | Story | Acceptance criteria |
 |---|---|---|---|
-| FR-90 | P0 | As a developer I can `pip install agentfactory` and use the CLI + Python API without the dashboard. | Wheel builds cleanly in CI; `agentfactory init/run/list-tools/status` work; SDK does not import web dependencies. |
+| FR-90 | P0 | As a developer I can `pip install agentfactory-studio` and use the CLI + Python API without the dashboard. | Wheel builds cleanly in CI; `agentfactory init/run/list-tools/status` work; SDK does not import web dependencies. |
 | FR-91 | P1 | As a developer I can drive the same agent configs from YAML or from the platform API. | Config schema shared; YAML export of an agent from the UI. |
 
 ## 6. Non-Functional Requirements

@@ -76,7 +76,7 @@ allow_delegation: true
 This template is designed to be used as a Python package dependency in your own agent projects:
 
 ```bash
-pip install agentfactory
+pip install agentfactory-studio
 ```
 
 ```python

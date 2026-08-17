@@ -88,7 +88,7 @@ by re-running tasks with correction context and persisting to memory.
 
 ## Extending the Framework
 
-1. `pip install agentfactory`
+1. `pip install agentfactory-studio`
 2. Write custom tools with `@tool`
 3. Define agent configs via `AgentPersona`
 4. Use `AgentFactory` to spawn agents targeting your repos

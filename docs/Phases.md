@@ -104,11 +104,11 @@ Legend — effort: **S** ≤ 2 days, **M** ≤ 1 week, **L** ≤ 2 weeks, **XL**
 ## Phase 6 — Release: Packaging, CI, Docs
 
 - **6.1 CI/CD** — GitHub Actions: lint (ruff), type check (mypy on SDK), tests (pytest + coverage ≥ 80%), security (bandit + pip-audit), wheel build + `pip install` smoke, UI build.
-- **6.2 Packaging** — publish `agentfactory` to PyPI (real wheel with console script); `agentfactory[platform]` extra for the dashboard; Dockerfile for self-host (API + static SPA + worker).
+- **6.2 Packaging** — publish to PyPI as `agentfactory-studio` (the bare `agentfactory` name is squatted on PyPI; the import package stays `agentfactory`); `agentfactory-studio[platform]` extra for the dashboard; Dockerfile for self-host (API + static SPA + worker).
 - **6.3 Docs** — update README (branding, install, quick start with Studio), `SUMMARY.md` links to all new docs, self-host guide (TLS, origins, secrets), migration guide v1→v2 schema.
 - **6.4 QA** — E2E flows (signup → agent → run → memory export), security test plan from `security.md` §5, manual marketplace abuse test.
 
-**Effort:** L. **Exit:** clean `pip install agentfactory` from PyPI in a fresh env; GitHub Actions green on main; public preview runs the full P0 stack.
+**Effort:** L. **Exit:** clean `pip install agentfactory-studio` from PyPI in a fresh env; GitHub Actions green on main; public preview runs the full P0 stack.
 
 ---
 
@@ -129,7 +129,7 @@ Legend — effort: **S** ≤ 2 days, **M** ≤ 1 week, **L** ≤ 2 weeks, **XL**
   badges.
 
 **Exit:** everything a first-time contributor and a self-hoster need to find
-is in the repo; `pip install agentfactory` from PyPI works; CI is green on
+is in the repo; `pip install agentfactory-studio` from PyPI works; CI is green on
 `main`.
 
 ---
