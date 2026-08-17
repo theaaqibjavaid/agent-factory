@@ -63,7 +63,7 @@ class AgentPersona(BaseModel):
 @dataclass
 class AgentExecutionStats:
     """Tracks execution statistics for an agent run."""
-    start_time: datetime = dc_field(default_factory=datetime.now)
+    start_time: datetime = dc_field(default_factory=lambda: datetime.now(timezone.utc))
     end_time: Optional[datetime] = None
     total_tokens: int = 0
     total_cost_usd: float = 0.0
@@ -123,8 +123,15 @@ class RunnableAgent:
         self._history: List[Dict[str, Any]] = []
         self._max_history_tokens: int = persona.max_context_length - 20000  # Reserve for tools
 
+        # MCP clients are connected lazily on first run (see _ensure_mcp_tools)
+        self._mcp_clients: Dict[str, Any] = {}
+
         # Load persistent history on init
         self._load_persistent_history()
+
+        # Only messages after this index are new and need persisting.
+        # Messages loaded from the DB are already stored, so we never re-save them.
+        self._last_saved_count = len(self._history)
 
     def _load_persistent_history(self) -> None:
         """Load conversation history from persistent memory."""
@@ -138,11 +145,19 @@ class RunnableAgent:
                 logger.warning(f"Could not load persistent history: {e}")
 
     def _save_persistent_history(self) -> None:
-        """Save conversation history to persistent memory."""
+        """
+        Save only the *new* conversation messages to persistent memory.
+
+        Re-saving the entire history on every turn caused quadratic growth in
+        the SQLite database (regression fixed in Phase 0). We track how many
+        messages have already been persisted and only write the delta.
+        """
         if self.memory and self._history:
             try:
-                new_messages = self._history[-len(self._history):]
-                self.memory.save_history(new_messages)
+                new_messages = self._history[self._last_saved_count:]
+                if new_messages:
+                    self.memory.save_history(new_messages)
+                    self._last_saved_count = len(self._history)
             except Exception as e:
                 logger.debug(f"Could not save persistent history: {e}")
 
@@ -374,7 +389,7 @@ Please fix the issues above and retry.
             tool_descs = []
             for name, t in self.tools._tools.items():
                 desc = t.metadata.description or name
-                args_str = ", ".join(f"{k}" for k in (t.signature or {}).get("parameters", {}).get("properties", {}).keys())
+                args_str = ", ".join(f"{k}" for k in (t.signature or {}).get("properties", {}).keys())
                 tool_descs.append(f"- {name}({args_str}): {desc}")
             prompt += f"\n\nAvailable tools:\n" + "\n".join(tool_descs)
 

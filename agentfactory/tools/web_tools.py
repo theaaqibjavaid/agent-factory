@@ -51,7 +51,7 @@ def web_fetch(url: str, max_length: int = 50000, summarize: bool = True) -> str:
         import requests
 
         headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; AgentFactory/1.0; +https://github.com/aaqarchitect/agentfactory)",
+            "User-Agent": "Mozilla/5.0 (compatible; AgentFactory/1.0; +https://github.com/theaaqibjavaid/agent-factory)",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         }
 

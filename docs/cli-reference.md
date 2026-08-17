@@ -101,6 +101,26 @@ Connects to `AGENT_SERVER_URL` (default: `http://localhost:8000/api/agent/status
 
 ---
 
+### `agentfactory token`
+
+Mint a JWT access token for the approval server (requires `JWT_SECRET_KEY`).
+
+```bash
+agentfactory token [--sub admin] [--roles admin] [--expires-hours 24]
+```
+
+Options:
+- `--sub` — Token subject / user identifier (default: `admin`)
+- `--roles` — Comma-separated roles (default: `admin`)
+- `--expires-hours` — Token expiry override (default: `JWT_EXPIRATION_HOURS`)
+
+This is the supported way to obtain tokens for local/self-hosted deployments —
+the server exposes **no** self-service token endpoint. Use the token as a Bearer
+header (`Authorization: Bearer <token>`) on `/api/agent/*` endpoints, and set
+`AGENT_SERVER_TOKEN` on the worker so it can authenticate too.
+
+---
+
 ## Global Options
 
 - `--version` / `agentfactory --version` — Show version (1.0.0)

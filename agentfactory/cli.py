@@ -260,6 +260,35 @@ def list_tools():
 
 
 @cli.command()
+@click.option("--sub", default="admin", help="Token subject (user identifier)")
+@click.option("--roles", default="admin", help="Comma-separated roles (e.g. admin,user)")
+@click.option("--expires-hours", type=int, default=None, help="Token expiry in hours (default: JWT_EXPIRATION_HOURS)")
+def token(sub: str, roles: str, expires_hours: int):
+    """
+    Mint a JWT access token for the approval server.
+
+    Requires JWT_SECRET_KEY to be set. This is the supported way to obtain
+    tokens for local/self-hosted deployments — there is no self-service
+    token endpoint on the server.
+
+    Example:
+        agentfactory token --sub admin --roles admin,user
+    """
+    secret = os.getenv("JWT_SECRET_KEY")
+    if not secret:
+        click.echo("Error: JWT_SECRET_KEY is not set. Set it to enable approval server auth.")
+        sys.exit(1)
+
+    try:
+        from agentfactory.app.approval_server import encode_token
+        roles_list = [r.strip() for r in roles.split(",") if r.strip()]
+        click.echo(encode_token(sub=sub, roles=roles_list, expires_hours=expires_hours))
+    except Exception as e:
+        click.echo(f"Error minting token: {e}")
+        sys.exit(1)
+
+
+@cli.command()
 def status():
     """Check the current approval server status."""
     import requests

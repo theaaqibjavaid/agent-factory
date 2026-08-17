@@ -9,6 +9,7 @@ pyyaml>=6.0
 structlog>=24.0
 click>=8.1
 requests>=2.32.0
+PyJWT>=2.8.0
 
 # Optional LLM providers — install as needed
 # langchain-google-genai>=2.0       # For Gemini models

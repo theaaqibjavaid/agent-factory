@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,13 +8,12 @@ version = "1.0.0"
 description = "Universal AI Agent Factory with multi-repo dev team"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"  # SPDX expression (PEP 639)
 authors = [{name = "AgentFactory", email = "hello@agentfactory.ai"}]
 keywords = ["ai", "agent", "llm", "multi-repo", "fastapi", "react"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -33,6 +32,7 @@ dependencies = [
     "structlog>=24.0",
     "click>=8.1",
     "requests>=2.32.0",
+    "PyJWT>=2.8.0",  # JWT auth for the approval server
     # Optional LLM integrations (install as extras):
     # pip install agentfactory[gemini]  -> langchain-google-genai
     # pip install agentfactory[openai]  -> langchain-openai
@@ -69,10 +69,10 @@ all = [
 agentfactory = "agentfactory.cli:cli"
 
 [project.urls]
-Homepage = "https://github.com/aaqarchitect/agentfactory"
-Documentation = "https://github.com/aaqarchitect/agentfactory/tree/main/docs"
-Repository = "https://github.com/aaqarchitect/agentfactory"
-Issues = "https://github.com/aaqarchitect/agentfactory/issues"
+Homepage = "https://github.com/theaaqibjavaid/agent-factory"
+Documentation = "https://github.com/theaaqibjavaid/agent-factory/tree/main/docs"
+Repository = "https://github.com/theaaqibjavaid/agent-factory"
+Issues = "https://github.com/theaaqibjavaid/agent-factory/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

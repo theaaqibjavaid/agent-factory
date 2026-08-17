@@ -38,6 +38,10 @@ class AgentWorker:
         self.poll_interval = poll_interval
         self._running = False
 
+        # Optional bearer token for talking to an auth-enabled approval server
+        server_token = os.getenv("AGENT_SERVER_TOKEN", "")
+        self._headers = {"Authorization": f"Bearer {server_token}"} if server_token else {}
+
         # Initialize agent factory
         self.factory = AgentFactory()
 
@@ -114,7 +118,7 @@ class AgentWorker:
         import requests
 
         try:
-            response = requests.get(f"{self.server_url}/api/agent/status", timeout=10)
+            response = requests.get(f"{self.server_url}/api/agent/status", headers=self._headers, timeout=10)
             if response.status_code != 200:
                 return
 
@@ -163,7 +167,7 @@ class AgentWorker:
             junior_config = None
 
         if junior_config:
-            from agentfactory.base_agent import AgentPersona
+            from agentfactory.base_agent import AgentPersona, RunnableAgent
             from agentfactory.llm_manager import FailoverLLMManager
 
             persona = AgentPersona(
@@ -206,7 +210,7 @@ class AgentWorker:
             # Mark as completed on the server
             import requests
             try:
-                requests.post(f"{self.server_url}/api/agent/executed", timeout=10)
+                requests.post(f"{self.server_url}/api/agent/executed", headers=self._headers, timeout=10)
             except Exception as e:
                 logger.warning(f"Could not mark proposal as completed: {e}")
 

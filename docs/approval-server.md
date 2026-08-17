@@ -15,14 +15,33 @@ The approval server provides:
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/health` | Health check |
-| `GET` | `/api/agent/status` | Get current agent status |
-| `POST` | `/api/proposals` | Create a new proposal |
-| `GET` | `/api/proposals` | List all proposals |
-| `GET` | `/api/proposals/{id}` | Get a specific proposal |
-| `POST` | `/api/proposals/{id}/approve` | Approve a proposal |
-| `POST` | `/api/proposals/{id}/reject` | Reject a proposal |
-| `GET` | `/api/branches` | List all feature branches |
+| `GET` | `/` | Health check (no sensitive data) |
+| `GET` | `/api/agent/status` | Get current proposal status |
+| `GET` | `/api/agent/proposals` | List proposals (optionally `?status_filter=`) |
+| `POST` | `/api/agent/propose` | Register a new proposal |
+| `POST` | `/api/agent/review` | Approve / reject / modify a proposal |
+| `POST` | `/api/agent/executed` | Mark the approved proposal as completed |
+| `DELETE` | `/api/agent/proposals/{id}` | Delete a proposal (admin) |
+| `GET` | `/docs` | Interactive OpenAPI docs |
+
+Interactive docs: `http://localhost:8000/docs`
+
+## Authentication
+
+By default (no `JWT_SECRET_KEY`) the server runs in **local mode** — all endpoints are
+open, suitable for a trusted single-user machine.
+
+Set `JWT_SECRET_KEY` to enable JWT bearer auth. When enabled, **all** `/api/agent/*`
+endpoints (including status and proposals) require `Authorization: Bearer <token>`.
+
+Mint a token locally (the server has no self-service token endpoint):
+
+```bash
+agentfactory token --sub admin --roles admin
+```
+
+Set `LOCAL_MODE=1` to force auth off even when a secret is configured. Configure the
+background worker with `AGENT_SERVER_TOKEN=<token>` so it can authenticate.
 
 ## State Machine
 

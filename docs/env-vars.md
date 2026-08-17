@@ -75,10 +75,17 @@ ADMIN_PATH=/absolute/path/to/admin-panel
 Set `JWT_SECRET_KEY` to enable JWT bearer token auth on the approval server.
 Generate one with: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 
+When auth is enabled, all `/api/agent/*` endpoints require `Authorization: Bearer <token>`.
+Mint tokens locally with `agentfactory token` — the server exposes **no** self-service
+token endpoint (security hardening, Phase 0).
+
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `JWT_SECRET_KEY` | Secret key for signing JWT tokens | *(empty — auth disabled)* |
 | `JWT_ALGORITHM` | JWT signing algorithm | `HS256` |
 | `JWT_EXPIRATION_HOURS` | Token expiry in hours | `24` |
 | `JWT_AUDIENCE` | Expected audience claim | `agentfactory` |
+| `LOCAL_MODE` | `1` forces auth **off** even when `JWT_SECRET_KEY` is set (single-user installs) | `0` |
+| `AGENT_SERVER_TOKEN` | Bearer token the background worker sends to the approval server | *(empty)* |
+| `AGENTFACTORY_ALLOWED_ORIGINS` | Comma-separated CORS allowed origins (e.g. `https://app.example.com`) | `*` (local mode) |
 | `APPROVAL_DB_PATH` | Path to approval server SQLite DB | `~/.agentfactory/approval.db` |

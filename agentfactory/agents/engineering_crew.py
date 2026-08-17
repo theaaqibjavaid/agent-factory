@@ -16,6 +16,7 @@ This module defines the coordination logic between agents.
 import os
 import json
 import time
+import subprocess
 import structlog
 from typing import Dict, Any, List, Optional
 

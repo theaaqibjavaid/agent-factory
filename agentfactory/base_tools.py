@@ -15,7 +15,6 @@ import functools
 import inspect
 import os
 import subprocess
-import asyncio
 from typing import Callable, Dict, Any, List, Optional, TYPE_CHECKING
 from dataclasses import dataclass, field
 from enum import Enum
@@ -270,15 +269,22 @@ class ToolWrapper:
         )
         self._tool_def = tool_def
         self._func = tool_def.func
-        self.signature = {"properties": tool_def.args_schema or {"properties": {}, "required": []}}
+        self.signature = tool_def.args_schema or {"properties": {}, "required": []}
 
     async def execute(self, arguments: Dict[str, Any]) -> str:
         """Execute the tool with given arguments."""
         sig = inspect.signature(self._func)
-        filtered_args = {}
-        for param_name in sig.parameters:
-            if param_name in arguments:
-                filtered_args[param_name] = arguments[param_name]
+        accepts_kwargs = any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+        )
+        if accepts_kwargs:
+            # **kwargs functions (e.g. MCP tool bridges) receive everything.
+            filtered_args = dict(arguments)
+        else:
+            filtered_args = {}
+            for param_name in sig.parameters:
+                if param_name in arguments:
+                    filtered_args[param_name] = arguments[param_name]
 
         result = self._func(**filtered_args)
 
@@ -325,13 +331,26 @@ class ToolRegistry:
 
         self._tools[tool_def.name] = ToolWrapper(tool_def)
 
-    def register_mcp_tool(self, name: str, metadata: ToolMetadata, server_name: str, client: Any) -> None:
+    def register_mcp_tool(
+        self,
+        name: str,
+        metadata: ToolMetadata,
+        server_name: str,
+        client: Any,
+        input_schema: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """Register a tool from an MCP server."""
+
+        async def _mcp_func(**kwargs: Any) -> str:
+            # Await directly on the running loop — a blocking wrapper here would
+            # deadlock because the event loop can't service the MCP response.
+            return await client.call_tool(name, kwargs)
+
         tool_def = ToolDef(
             name=name,
-            func=lambda **kwargs: _mcp_tool_call(client, name, kwargs),
+            func=_mcp_func,
             description=metadata.description,
-            args_schema={"properties": metadata.__dict__},  # Simplified
+            args_schema=input_schema or {"properties": {}, "required": []},
             category=f"mcp-{server_name}",
             cost_per_call_usd=0.0,
             safety_level=metadata.safety_level,
@@ -370,29 +389,4 @@ class ToolRegistry:
         return [t for t in self._tools.values() if tag in t.metadata.tags]
 
 
-def _mcp_tool_call(client: Any, name: str, kwargs: Dict[str, Any]) -> str:
-    """Synchronous wrapper for MCP tool calls.
 
-    Works both from synchronous code and from within an existing event loop.
-    """
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop is None:
-        # No running loop — create one and run to completion
-        return asyncio.run(client.call_tool(name, kwargs))
-    else:
-        # We're inside an event loop — schedule the coroutine on it
-        # and return a result via a future. Since ToolWrapper.execute
-        # is async, we instead raise to signal the caller should await.
-        # However, the old API is sync, so we use asyncio.run_coroutine_threadsafe
-        # which works when the loop is running in another thread.
-        # As a fallback, create a new loop in a separate thread.
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            future = asyncio.run_coroutine_threadsafe(
-                client.call_tool(name, kwargs), loop
-            )
-            return future.result()

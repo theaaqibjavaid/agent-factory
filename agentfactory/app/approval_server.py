@@ -15,6 +15,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone, timedelta
+from uuid import uuid4
 import os
 import json
 import sqlite3
@@ -42,38 +43,73 @@ logger = structlog.get_logger()
 # ============================================================
 # JWT Authentication
 # ============================================================
-
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
-JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "agentfactory")
+# Auth settings are read lazily per-request so tests and runtime config
+# changes can swap them via the environment (JWT_SECRET_KEY, LOCAL_MODE, ...).
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+def _auth_config() -> Dict[str, Any]:
+    """Read auth-related settings from the environment."""
+    local_mode = os.getenv("LOCAL_MODE", "0").strip().lower() in ("1", "true", "yes", "on")
+    return {
+        "local_mode": local_mode,
+        "secret": os.getenv("JWT_SECRET_KEY", ""),
+        "algorithm": os.getenv("JWT_ALGORITHM", "HS256"),
+        "expiration_hours": int(os.getenv("JWT_EXPIRATION_HOURS", "24")),
+        "audience": os.getenv("JWT_AUDIENCE", "agentfactory"),
+    }
+
+
 def _is_auth_enabled() -> bool:
-    """Check if JWT authentication is enabled (secret key set)."""
-    return bool(JWT_SECRET_KEY)
+    """Auth is enabled when a JWT secret is configured and LOCAL_MODE is off."""
+    cfg = _auth_config()
+    return (not cfg["local_mode"]) and bool(cfg["secret"])
 
 
-def _encode_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
-    """Encode a JWT token."""
+def encode_token(sub: str, roles: List[str], expires_hours: Optional[int] = None) -> str:
+    """
+    Encode a JWT access token (used by the `agentfactory token` CLI and tests).
+
+    Only callable when JWT_SECRET_KEY is configured.
+    """
     import jwt
-    to_encode = data.copy()
+
+    cfg = _auth_config()
+    if not cfg["secret"]:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="JWT_SECRET_KEY is not configured")
+
     now = datetime.now(timezone.utc)
-    expire = now + (expires_delta or timedelta(hours=JWT_EXPIRATION_HOURS))
-    to_encode.update({"iat": int(now.timestamp()), "exp": int(expire.timestamp()), "aud": JWT_AUDIENCE})
-    return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    expire = now + timedelta(hours=expires_hours or cfg["expiration_hours"])
+    payload = {
+        "sub": sub,
+        "roles": roles,
+        "iat": int(now.timestamp()),
+        "exp": int(expire.timestamp()),
+        "aud": cfg["audience"],
+    }
+    return jwt.encode(payload, cfg["secret"], algorithm=cfg["algorithm"])
 
 
 def _decode_token(token: str) -> Dict[str, Any]:
     """Decode and validate a JWT token."""
     import jwt
+
+    cfg = _auth_config()
     try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM], audience=JWT_AUDIENCE, options={"require_aud": True, "require_exp": True, "require_iat": True})
-        return payload
+        return jwt.decode(
+            token,
+            cfg["secret"],
+            algorithms=[cfg["algorithm"]],
+            audience=cfg["audience"],
+            options={"require_aud": True, "require_exp": True, "require_iat": True},
+        )
     except jwt.PyJWTError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid or expired token: {str(e)}", headers={"WWW-Authenticate": "Bearer"})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid or expired token: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)) -> Dict[str, Any]:
@@ -99,17 +135,30 @@ def require_role(*roles: str):
 # FastAPI App
 # ============================================================
 
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize the database on startup."""
+    init_db()
+    logger.info("AgentFactory Approval Server started")
+    yield
+
+
 app = FastAPI(
     title="AgentFactory Approval Server",
     description="Control API for multi-agent team approvals",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
-# CORS
+# CORS — explicit origins via env (comma-separated). Default: allow all (local mode).
+_ALLOWED_ORIGINS = [o.strip() for o in os.getenv("AGENTFACTORY_ALLOWED_ORIGINS", "*").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_credentials=_ALLOWED_ORIGINS != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -236,43 +285,7 @@ async def root():
     return {"status": "ok", "service": "AgentFactory Approval Server", "version": "1.0.0", "auth_enabled": _is_auth_enabled()}
 
 
-class TokenRequest(BaseModel):
-    """Request a JWT token (requires JWT_SECRET_KEY to be configured)."""
-    sub: str = Field(..., description="Subject (user identifier)")
-    roles: List[str] = Field(default_factory=lambda: ["user"])
-    expires_hours: Optional[int] = Field(default=None, description="Custom expiry in hours")
-
-
-@app.post("/api/agent/token")
-async def issue_token(payload: TokenRequest):
-    """
-    Issue a JWT token for API access.
-
-    This endpoint is only available when JWT_SECRET_KEY is set in the environment.
-    In production, front this with an identity provider or API gateway.
-
-    Args:
-        sub: User identifier (e.g., email or username)
-        roles: Roles to assign (e.g., ["user"], ["admin"])
-        expires_hours: Custom token expiry (defaults to JWT_EXPIRATION_HOURS)
-
-    Returns:
-        JWT token string
-    """
-    if not _is_auth_enabled():
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="JWT authentication is not configured. Set JWT_SECRET_KEY environment variable.",
-        )
-
-    expires_delta = timedelta(hours=payload.expires_hours) if payload.expires_hours else None
-    token = _encode_token({"sub": payload.sub, "roles": payload.roles}, expires_delta)
-
-    logger.info("Token issued", sub=payload.sub, roles=payload.roles)
-    return {"access_token": token, "token_type": "bearer"}
-
-
-@app.get("/api/agent/status")
+@app.get("/api/agent/status", dependencies=[Depends(get_current_user)])
 async def get_status():
     """Get the current proposal status."""
     conn = get_db()
@@ -315,7 +328,7 @@ async def propose_feature(payload: ProposalPayload):
     Creates a new proposal in the SQLite database and sends
     notifications to Discord and Gmail.
     """
-    proposal_id = f"prop-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+    proposal_id = f"prop-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}"
     now = datetime.now(timezone.utc).isoformat()
 
     conn = get_db()
@@ -467,7 +480,7 @@ async def mark_executed():
         conn.close()
 
 
-@app.get("/api/agent/proposals")
+@app.get("/api/agent/proposals", dependencies=[Depends(get_current_user)])
 async def list_proposals(limit: int = 20, status_filter: Optional[str] = None):
     """List recent proposals."""
     conn = get_db()
@@ -636,9 +649,3 @@ def _send_discord_status(title: str, message: str, branch_name: str, color: int 
 # ============================================================
 # Startup
 # ============================================================
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize database on startup."""
-    init_db()
-    logger.info("AgentFactory Approval Server started")
