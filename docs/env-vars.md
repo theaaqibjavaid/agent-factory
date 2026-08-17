@@ -87,5 +87,26 @@ token endpoint (security hardening, Phase 0).
 | `JWT_AUDIENCE` | Expected audience claim | `agentfactory` |
 | `LOCAL_MODE` | `1` forces auth **off** even when `JWT_SECRET_KEY` is set (single-user installs) | `0` |
 | `AGENT_SERVER_TOKEN` | Bearer token the background worker sends to the approval server | *(empty)* |
-| `AGENTFACTORY_ALLOWED_ORIGINS` | Comma-separated CORS allowed origins (e.g. `https://app.example.com`) | `*` (local mode) |
+| `AGENTFACTORY_ALLOWED_ORIGINS` | Comma-separated CORS allowed origins (e.g. `https://app.example.com`) — used by both the approval server and the platform API | `*` (local mode) |
 | `APPROVAL_DB_PATH` | Path to approval server SQLite DB | `~/.agentfactory/approval.db` |
+
+## Platform API (Phase 1 — multi-user backend)
+
+The platform API (`agentfactory.app.main`, mounted at `/api/v1`) is a separate
+FastAPI app with its own SQLite database. It powers signup/login, workspaces,
+and agents for the Studio dashboard. The v1 approval server is untouched and
+keeps working in `LOCAL_MODE` (legacy bridge, Phase 1 task 1.5).
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AGENTFACTORY_DB_PATH` | Path to the platform SQLite DB (users, workspaces, agents, ...) | `~/.agentfactory/platform.db` |
+| `AGENTFACTORY_JWT_SECRET` | Signing secret for platform access JWTs (falls back to `JWT_SECRET_KEY`) | *(empty — platform auth disabled)* |
+| `AGENTFACTORY_ACCESS_TOKEN_MINUTES` | Platform access-token lifetime | `15` |
+| `AGENTFACTORY_REFRESH_TOKEN_DAYS` | Platform refresh-token lifetime (rotation + revocation) | `7` |
+| `AGENTFACTORY_APP_URL` | Public base URL used to build OAuth redirect URIs | `http://localhost:8000` |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth app credentials (login via Google) | *(empty — disabled)* |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth app credentials (login via GitHub) | *(empty — disabled)* |
+
+Passwords are hashed with argon2id; refresh tokens are opaque, stored in
+SQLite, and rotated on every use (replays rejected). Start the platform API
+with `uvicorn agentfactory.app.main:app --port 8000`.
