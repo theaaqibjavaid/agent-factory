@@ -31,9 +31,10 @@ import json
 import os
 import threading
 import structlog
-from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
+
+from agentfactory.crypto import encrypt_text, decrypt_text, encryption_enabled
 
 logger = structlog.get_logger()
 
@@ -136,6 +137,13 @@ class PersistentMemory:
                 start_seq = (row["max_seq"] or 0) + 1
 
                 for i, msg in enumerate(messages):
+                    content = str(msg.get("content", ""))
+                    metadata = json.dumps(msg.get("metadata", {}))
+                    # S-9 encryption-at-rest: only active when AGENTFACTORY_ENCRYPTION_KEY is set.
+                    if encryption_enabled():
+                        content = encrypt_text(content)
+                        metadata = encrypt_text(metadata)
+
                     conn.execute("""
                         INSERT INTO memory_history
                             (agent_id, message_role, message_content, message_metadata, created_at, seq)
@@ -143,8 +151,8 @@ class PersistentMemory:
                     """, (
                         self.agent_id,
                         msg.get("role", "unknown"),
-                        msg.get("content", ""),
-                        json.dumps(msg.get("metadata", {})),
+                        content,
+                        metadata,
                         now,
                         start_seq + i,
                     ))
@@ -182,14 +190,20 @@ class PersistentMemory:
 
                 messages = []
                 for row in rows:
+                    stored_content = row["message_content"]
+                    stored_metadata = row["message_metadata"]
+                    # S-9: Fernet tokens decrypt; legacy plaintext passes through.
+                    if encryption_enabled():
+                        stored_content = decrypt_text(stored_content)
+                        stored_metadata = decrypt_text(stored_metadata)
                     try:
-                        metadata = json.loads(row["message_metadata"]) if row["message_metadata"] else {}
+                        metadata = json.loads(stored_metadata) if stored_metadata else {}
                     except json.JSONDecodeError:
                         metadata = {}
 
                     messages.append({
                         "role": row["message_role"],
-                        "content": row["message_content"],
+                        "content": stored_content,
                         "metadata": metadata,
                     })
 
@@ -228,6 +242,8 @@ class PersistentMemory:
         """
         now = datetime.now(timezone.utc).isoformat()
         value_str = value if isinstance(value, str) else json.dumps(value)
+        if encryption_enabled():
+            value_str = encrypt_text(value_str)
 
         with self._lock:
             conn = self._get_conn()
@@ -274,6 +290,8 @@ class PersistentMemory:
 
                 value = row["fact_value"]
                 fact_type = row["fact_type"]
+                if encryption_enabled():
+                    value = decrypt_text(value)
 
                 # Try to deserialize non-string types
                 if fact_type in ("json", "dict", "list", "int", "float", "bool"):
@@ -317,6 +335,8 @@ class PersistentMemory:
                 for row in rows:
                     value = row["fact_value"]
                     fact_type = row["fact_type"]
+                    if encryption_enabled():
+                        value = decrypt_text(value)
                     if fact_type in ("json", "dict", "list", "int", "float", "bool"):
                         try:
                             facts[row["fact_key"]] = json.loads(value)

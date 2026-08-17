@@ -106,6 +106,7 @@ keeps working in `LOCAL_MODE` (legacy bridge, Phase 1 task 1.5).
 | `AGENTFACTORY_APP_URL` | Public base URL used to build OAuth redirect URIs | `http://localhost:8000` |
 | `AGENTFACTORY_SPA_DIR` | Directory of the built Studio SPA; when set, the API also serves the UI (self-host single process, Phase 6.2) | *(empty — API-only)* |
 | `AGENTFACTORY_RATE_LIMIT_AUTH` | Auth surface rate limit in requests/minute/IP (signup/login/refresh/OAuth); `0` disables (Phase 7.1) | `20` |
+| `AGENTFACTORY_ENCRYPTION_KEY` | Fernet key enabling **encryption-at-rest** (Phase 8.1, S-9): memory conversations/facts, run `result`/`error`, and proposal `plan`/`decision_notes` are encrypted before hitting SQLite and transparently decrypted for API consumers. Any string works (stretched with PBKDF2); generate a proper key with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. **Back up this key** — data written with it cannot be decrypted without it. Legacy plaintext rows keep working with no migration. | *(empty — encryption off)* |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth app credentials (login via Google) | *(empty — disabled)* |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth app credentials (login via GitHub) | *(empty — disabled)* |
 

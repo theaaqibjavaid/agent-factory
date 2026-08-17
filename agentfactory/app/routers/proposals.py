@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from agentfactory.app import db
 from agentfactory.app.deps import get_current_user, get_current_workspace
+from agentfactory.crypto import decrypt_field, encrypt_field
 from agentfactory.runtime import execute_run
 
 router = APIRouter(tags=["proposals"], dependencies=[Depends(get_current_user)])
@@ -32,7 +33,11 @@ def _now_iso() -> str:
 
 
 def _proposal_payload(row) -> dict:
-    return dict(row)
+    data = dict(row)
+    # S-9 encryption-at-rest: plans and decision notes decrypt transparently.
+    for col in ("plan", "decision_notes"):
+        data[col] = decrypt_field(data.get(col))
+    return data
 
 
 def _get_proposal(workspace_id: str, proposal_id: str) -> Optional[dict]:
@@ -131,7 +136,7 @@ async def review_proposal(
         if action == "approve":
             conn.execute(
                 "UPDATE proposals SET status = 'approved', decision_notes = ?, updated_at = ? WHERE id = ?",
-                (payload.notes, now, proposal_id),
+                (encrypt_field(payload.notes), now, proposal_id),
             )
             conn.commit()
             run = _get_run_for_proposal(proposal)
@@ -145,7 +150,7 @@ async def review_proposal(
         elif action == "reject":
             conn.execute(
                 "UPDATE proposals SET status = 'rejected', decision_notes = ?, updated_at = ? WHERE id = ?",
-                (payload.notes, now, proposal_id),
+                (encrypt_field(payload.notes), now, proposal_id),
             )
             conn.commit()
             run = _get_run_for_proposal(proposal)
@@ -156,9 +161,10 @@ async def review_proposal(
                 )
                 conn.commit()
         else:  # modify
+            new_plan = proposal["plan"] if payload.notes is None else encrypt_field(payload.notes)
             conn.execute(
                 "UPDATE proposals SET status = 'modified', decision_notes = ?, plan = ?, updated_at = ? WHERE id = ?",
-                (payload.notes, payload.notes or proposal["plan"], now, proposal_id),
+                (encrypt_field(payload.notes), new_plan, now, proposal_id),
             )
             conn.commit()
     finally:

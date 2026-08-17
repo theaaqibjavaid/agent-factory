@@ -34,6 +34,7 @@ jobs:
         run: |
           mypy agentfactory/app agentfactory/runtime.py agentfactory/terminal.py \
                agentfactory/validation.py agentfactory/custom_tools.py \
+               agentfactory/crypto.py agentfactory/redact.py \
                --follow-imports=skip --ignore-missing-imports
 
       - name: Test + coverage gate (platform surface)

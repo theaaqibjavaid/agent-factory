@@ -37,9 +37,9 @@ Threat model, confirmed vulnerabilities from the audit, and the security require
 | S-6 | `base_agent.py` | `SafetyLevel` (SAFE/MODIFIED/DESTRUCTIVE) is **never enforced**. `delete_file` defaults `confirm=True`. No gate exists for destructive tool calls. |
 | S-7 | `app/approval_server.py` | CORS `allow_origins=["*"]` **with** `allow_credentials=True` — invalid combination; browsers reject credentialed requests and wildcard CORS weakens origin isolation. |
 | S-8 | `app/approval_server.py` | No rate limiting on auth/approval/token endpoints; token endpoint enables credential-guessing surface when deployed. |
-| S-9 | `memory.py` / `approval_server.py` | Conversations, facts, plans, and approval data stored **plaintext** in SQLite. |
-| S-10 | `llm_manager.py` + tools | API keys read from env at call time; key names may surface in errors/logs (e.g., Tavily fallback messages echo query; Discord errors echo responses). Audit log hygiene needed. |
-| S-11 | `base_tools.py` | `register_mcp_tool` stores `args_schema={"properties": metadata.__dict__}` — schema leaks internal metadata and is not a real arg schema; tool args from LLMs are unvalidated before execution. |
+| S-9 | `memory.py` / `approval_server.py` | Conversations, facts, plans, and approval data stored **plaintext** in SQLite. ~~**Phase 8.1 — resolved:** opt-in Fernet encryption-at-rest via `AGENTFACTORY_ENCRYPTION_KEY` (memory content/facts, run `result`/`error`, proposal `plan`/`decision_notes`); legacy rows pass through transparently.~~ |
+| S-10 | `llm_manager.py` + tools | API keys read from env at call time; key names may surface in errors/logs (e.g., Tavily fallback messages echo query; Discord errors echo responses). Audit log hygiene needed. ~~**Phase 8.2 — resolved:** `agentfactory.redact.redact_secrets` scrubs key/token shapes from logs and persisted run errors.~~ |
+| S-11 | `base_tools.py` | `register_mcp_tool` stores `args_schema={"properties": metadata.__dict__}` — schema leaks internal metadata and is not a real arg schema; tool args from LLMs are unvalidated before execution. ~~**Phase 8.3 — resolved:** LLM tool args validated against the args schema before execution (missing/wrong-typed args never reach the tool); MCP `input_schema`s enforced on `**kwargs` bridges.~~ |
 | S-12 | `agents/worker.py` | Worker has **no auth** — any local process can call the approval API and drive executions; no signature on worker↔server traffic. |
 
 ### 2.3 Medium
@@ -134,7 +134,11 @@ enforces it. New regressions must ship a test in the same file (Phase 0 rule).
 | 9 | SPA serving: path traversal cannot escape the SPA directory | `tests/test_platform_phase6.py::TestSpaServing` | ✅ automated |
 | 10 | Static: `bandit -r agentfactory -ll`, `pip-audit -r requirements.txt` | `.github/workflows/ci.yml` (security job) | ✅ automated |
 | 11 | Types: mypy gate on the platform surface | `.github/workflows/ci.yml` (test job) | ✅ automated |
-| 12 | Dynamic/manual pre-release: run with `AGENTFACTORY_JWT_SECRET` set; fuzz proposal payloads; verify no token leaks in logs | manual checklist | ⏳ pre-release |
+| 12 | Encryption-at-rest (S-9): with `AGENTFACTORY_ENCRYPTION_KEY` set, memory content/facts, run result/error, and proposal plan/notes are ciphertext on disk and plaintext via the API; legacy plaintext rows still read | `tests/test_platform_phase8.py` | ✅ automated |
+| 13 | Log hygiene (S-10): `redact_secrets` scrubs `sk-`/`AIza`/`Bearer`/`AKIA`/JWT shapes, leaves normal text intact; run errors redacted before persist | `tests/test_platform_phase8.py::TestRedact` + `TestRunUpdateAtRest::test_error_redacted_before_persist` | ✅ automated |
+| 14 | Tool args validation (S-11): missing/wrong-typed args raise before the tool runs; MCP bridges validated; unknown keys dropped; optional nulls allowed | `tests/test_platform_phase8.py::TestArgsValidation` + `TestToolWrapperExecution` | ✅ automated |
+| 15 | Dynamic/manual pre-release: run with `AGENTFACTORY_JWT_SECRET` set; fuzz proposal payloads; verify no token leaks in logs | manual checklist | ⏳ pre-release |
+| 16 | Pentest checklist (before public hosting): all STRIDE items above reviewed and signed off in this file's revision log | manual checklist | ⏳ pre-release |
 | 13 | Pentest checklist (before public hosting): all STRIDE items above reviewed and signed off in this file's revision log | manual checklist | ⏳ pre-release |
 
 ---
@@ -145,5 +149,5 @@ enforces it. New regressions must ship a test in the same file (Phase 0 rule).
 2. S-6 — runtime SafetyLevel enforcement + destructive gate.
 3. S-7, S-8 — CORS fix, rate limiting.
 4. S-3, S-4, S-5 — workspace sandbox, MCP allowlist, skill validation (EXEC-1..4).
-5. S-9 — encryption-at-rest option + clear docs.
-6. S-10..S-16 — log hygiene, schema fix, worker auth, idempotent IDs.
+5. ~~S-9 — encryption-at-rest option + clear docs~~ (**Phase 8.1 done**).
+6. ~~S-10, S-11 — log hygiene, tool args schema validation~~ (**Phase 8.2/8.3 done**); S-12 worker auth, S-13 idempotent IDs, S-14 mcp.json hygiene, S-15 CSRF (future cookie auth), S-16 cwd .env validation remain.

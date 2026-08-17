@@ -540,7 +540,9 @@ class FailoverLLMManager:
             is_rate_limit = True  # Assume failover is needed
 
         if not is_rate_limit:
-            logger.warning(f"Non-rate-limit error (not failing over): {error}")
+            # S-10 log hygiene: provider errors can echo API keys — scrub before logging.
+            from agentfactory.redact import redact_secrets
+            logger.warning(f"Non-rate-limit error (not failing over): {redact_secrets(str(error))}")
             return False
 
         if self.current_index < len(self.pipeline) - 1:

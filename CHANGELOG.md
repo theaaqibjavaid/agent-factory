@@ -6,6 +6,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-08-17
+
+Security hardening (Phase 8) and container distribution.
+
+### Added
+
+- **Encryption-at-rest** (closes S-9): set `AGENTFACTORY_ENCRYPTION_KEY` to
+  encrypt memory conversations/facts, run `result`/`error`, and proposal
+  `plan`/`decision_notes` before they hit SQLite. Transparently decrypted for
+  API consumers; legacy plaintext rows keep working with no migration.
+- **Log/key hygiene** (closes S-10): `agentfactory.redact.redact_secrets`
+  scrubs `sk-`/`AIza`/`Bearer`/`AKIA`/GitHub/Slack/JWT shapes from logs and
+  persisted run errors.
+- **Tool arguments validation** (closes S-11): LLM-supplied tool args are
+  validated against the tool's args schema before execution — missing or
+  wrong-typed args never reach the tool function; MCP `input_schema`s are
+  enforced on `**kwargs` bridges.
+- **Docker Hub publish workflow** (`.github/workflows/docker.yml`): builds and
+  pushes the self-host container on `v*` tags; skips cleanly until
+  `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets are added.
+
+### Changed
+
+- All version sources aligned to **1.2.0**.
+- `docs/security.md` backlog: S-9/S-10/S-11 marked resolved; new automated
+  checks (rows 12–14) in the security test plan.
+
 ## [1.1.0] — 2026-08-17
 
 Open-source release hardening.
@@ -65,7 +92,8 @@ Legacy SDK baseline: single-agent template with LLM failover, persistent
 memory, tool registry, verifier, CLI, and the v1 approval server. This is the
 v1 codebase that Phases 0–6 built on — see `docs/migration-v1-v2.md`.
 
-[Unreleased]: https://github.com/theaaqibjavaid/agent-factory/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/theaaqibjavaid/agent-factory/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/theaaqibjavaid/agent-factory/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/theaaqibjavaid/agent-factory/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/theaaqibjavaid/agent-factory/releases/tag/v1.0.0
 [0.9.0]: https://github.com/theaaqibjavaid/agent-factory/releases/tag/v0.9.0

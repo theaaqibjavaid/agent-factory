@@ -745,6 +745,14 @@ def _get_workspace_settings(workspace_id: str) -> dict:
 
 def _update_run(run_id: str, **fields: Any) -> None:
     from agentfactory.app import db
+    from agentfactory.crypto import encrypt_field
+    from agentfactory.redact import redact_secrets
+
+    # S-9 encryption-at-rest: result/error are encrypted when a key is configured.
+    for sensitive in ("result", "error"):
+        if sensitive in fields and isinstance(fields[sensitive], str):
+            # S-10 log/key hygiene: never persist provider error text verbatim.
+            fields[sensitive] = encrypt_field(redact_secrets(fields[sensitive]))
 
     sets = ", ".join(f"{k} = ?" for k in fields)
     conn = db.get_db()

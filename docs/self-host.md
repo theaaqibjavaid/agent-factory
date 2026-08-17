@@ -8,7 +8,9 @@ self-hosting is one container or one `uvicorn` process.
 ## Option 1 — Docker (recommended)
 
 The repository's `Dockerfile` builds the Studio SPA (stage 1) and packages the
-platform API + SPA into one image (stage 2).
+platform API + SPA into one image (stage 2). Prebuilt images are published to
+Docker Hub on version tags (`.github/workflows/docker.yml`) — until secrets are
+configured, build locally:
 
 ```bash
 # Build and run
@@ -17,6 +19,7 @@ docker run -d \
   --name agentfactory \
   -p 8000:8000 \
   -e AGENTFACTORY_JWT_SECRET="$(openssl rand -hex 32)" \
+  -e AGENTFACTORY_ENCRYPTION_KEY="$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" \
   -e AGENTFACTORY_ALLOWED_ORIGINS="https://your.domain" \
   -v agentfactory-data:/data \
   agentfactory
@@ -28,6 +31,12 @@ workspace.
 > **Important**: replace the JWT secret with your own random value. The
 > default only exists for local development. Anyone who knows the secret can
 > mint tokens for any user.
+>
+> `AGENTFACTORY_ENCRYPTION_KEY` is **optional** but recommended: it encrypts
+> conversations, facts, plans, and approval data at rest (Phase 8.1). Generate
+> it once with the command above and **back it up** — data written with it is
+> unrecoverable without it. The `agentfactory-data` volume holds the SQLite
+> databases, so the key must stay stable across container restarts.
 
 ### docker-compose example
 

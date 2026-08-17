@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 # is `agentfactory-studio` because the bare `agentfactory` name is taken on
 # PyPI (squatted with a placeholder 0.0.0 release).
 name = "agentfactory-studio"
-version = "1.1.0"
+version = "1.2.0"
 description = "Universal AI Agent Factory: SDK + self-hosted Studio for building and operating any AI agent"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -29,6 +29,7 @@ dependencies = [
     "langchain-core>=0.3.0",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
+    "cryptography>=41.0",  # encryption-at-rest (S-9): Fernet via AGENTFACTORY_ENCRYPTION_KEY
     "fastapi>=0.110.0",
     "uvicorn>=0.29.0",
     "pyyaml>=6.0",

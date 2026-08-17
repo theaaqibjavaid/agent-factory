@@ -179,10 +179,12 @@ More: [docs/architecture.md](docs/architecture.md), [docs/design.md](docs/design
 ## 🛡️ Security
 
 Security is a first-class concern: argon2id password hashing, JWT rotation
-with revocation, per-IP rate limiting on auth, validated + sandboxed custom
-tool execution, MCP command/env allowlists, destructive-command guards, path
-allowlists, and an automated security pipeline (bandit, pip-audit, mypy,
-coverage gate) in CI.
+with revocation, per-IP rate limiting on auth, **opt-in encryption-at-rest**
+(set `AGENTFACTORY_ENCRYPTION_KEY` to encrypt conversations, facts, plans, and
+approval data), validated + sandboxed custom tool execution with schema-validated
+tool arguments, MCP command/env allowlists, destructive-command guards, path
+allowlists, secret-scrubbed logs, and an automated security pipeline (bandit,
+pip-audit, mypy, coverage gate) in CI.
 
 - Threat model + test plan: [docs/security.md](docs/security.md)
 - Reporting vulnerabilities: [SECURITY.md](SECURITY.md)

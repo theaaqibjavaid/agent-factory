@@ -11,6 +11,7 @@ click>=8.1
 requests>=2.32.0
 PyJWT>=2.8.0
 argon2-cffi>=23.1
+cryptography>=41.0          # encryption-at-rest (Phase 8.1, S-9)
 
 # Optional LLM providers — install as needed
 # langchain-google-genai>=2.0       # For Gemini models

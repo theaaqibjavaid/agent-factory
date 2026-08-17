@@ -134,6 +134,34 @@ is in the repo; `pip install agentfactory-studio` from PyPI works; CI is green o
 
 ---
 
+## Phase 8 — Security Hardening + Container Distribution
+
+- **8.1 Encryption-at-rest (S-9)** — `agentfactory/crypto.py`: opt-in Fernet
+  encryption via `AGENTFACTORY_ENCRYPTION_KEY`. Memory conversations/facts,
+  run `result`/`error`, and proposal `plan`/`decision_notes` are ciphertext on
+  disk and transparently decrypted for API consumers; legacy plaintext rows
+  pass through with no migration. No key → unchanged behavior.
+- **8.2 Log/key hygiene (S-10)** — `agentfactory/redact.py`: `redact_secrets`
+  scrubs `sk-`/`AIza`/`Bearer`/`AKIA`/GitHub/Slack/JWT shapes from LLM error
+  logs and persisted run errors.
+- **8.3 Tool args validation (S-11)** — `validate_tool_arguments` in
+  `base_tools.py`: missing/wrong-typed LLM args raise before the tool runs;
+  unknown keys dropped; optional nulls allowed; MCP `input_schema`s enforced
+  on `**kwargs` bridges.
+- **8.4 Docker Hub publish** — `.github/workflows/docker.yml`: multi-arch
+  image on `v*` tags (skips cleanly until `DOCKERHUB_USERNAME`/`TOKEN`
+  secrets exist).
+- **8.5 Docs/version** — bumped to 1.2.0 everywhere; CHANGELOG entry;
+  `security.md` backlog S-9/S-10/S-11 marked resolved; env reference +
+  self-host guide updated.
+
+**Exit:** sensitive columns at rest are encrypted when configured (with API
+round-trip + no-key-compat tests); secrets never appear in logs/errors; invalid
+tool args are rejected pre-execution; container is one tag + two secrets away
+from Docker Hub.
+
+---
+
 ## Dependency Graph
 
 ```
@@ -141,6 +169,7 @@ Phase 0 ──► Phase 1 ──► Phase 2 ──► Phase 3 ──► Phase 5
    │           │           │           │
    │           └───────────┼───────────┼──────► Phase 4 (needs 0.7, 1.x, 2.1)
    └───────────────────────┴───────────┴──────► Phase 6 (after 3–5)
+Phase 6 ──► Phase 7 ──► Phase 8 (hardening + Docker Hub)
 ```
 
 - Phase 3 needs Phases 1–2 for the APIs it consumes.

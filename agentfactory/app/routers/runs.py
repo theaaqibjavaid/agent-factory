@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from agentfactory.app import db
 from agentfactory.app.deps import get_current_user, get_current_workspace
+from agentfactory.crypto import encrypt_field
 from agentfactory.runtime import (
     execute_run,
     get_broker,
@@ -41,6 +42,10 @@ def _now_iso() -> str:
 
 def _run_payload(row) -> dict:
     data = dict(row)
+    # S-9 encryption-at-rest: result/error may be Fernet tokens — decrypt for API consumers.
+    from agentfactory.crypto import decrypt_field
+    for col in ("result", "error"):
+        data[col] = decrypt_field(data.get(col))
     for col in ("stats", "config_snapshot"):
         if isinstance(data.get(col), str):
             try:
@@ -105,6 +110,7 @@ async def create_run(
     conn = db.get_db()
     try:
         status = "pending_approval" if agent["hitl_mode"] == "gate" else "pending"
+
         conn.execute(
             """
             INSERT INTO agent_runs (id, agent_id, workspace_id, task, status,
@@ -134,7 +140,7 @@ async def create_run(
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (proposal_id, workspace["id"], agent_id, run_id, payload.task[:200],
-                 payload.task, "pending", user["id"], now, now),
+                 encrypt_field(payload.task), "pending", user["id"], now, now),
             )
             conn.commit()
         finally:

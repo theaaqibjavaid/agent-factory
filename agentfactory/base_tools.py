@@ -255,6 +255,71 @@ def clear_registry() -> None:
 # ToolRegistry: Class-based registry with async support
 # ============================================================
 
+def validate_tool_arguments(arguments: Dict[str, Any], args_schema: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Validate LLM-supplied tool arguments against the tool's args schema (S-11).
+
+    - Missing required parameters raise ``ValueError`` before the tool runs.
+    - Type mismatches are coerced when lossless (int -> float), otherwise rejected.
+    - Unknown extra keys are dropped (never forwarded to the tool function).
+    - A tool with no schema (or a ``**kwargs`` bridge) is unconstrained.
+
+    Returns the validated, filtered argument dict ready for ``func(**args)``.
+    """
+    if not args_schema or not args_schema.get("properties"):
+        return dict(arguments)
+
+    properties: Dict[str, Any] = args_schema["properties"]
+    required: List[str] = list(args_schema.get("required") or [])
+
+    validated: Dict[str, Any] = {}
+    missing = [name for name in required if name not in arguments]
+    if missing:
+        raise ValueError(f"Missing required argument(s): {', '.join(missing)}")
+
+    for name, raw in arguments.items():
+        if name not in properties:
+            continue  # drop unknown keys instead of crashing the call
+        expected = properties[name].get("type", "string")
+
+        # Optional params may be explicitly nulled by the model.
+        if raw is None and name not in required:
+            validated[name] = None
+            continue
+
+        if expected == "string":
+            if isinstance(raw, str):
+                validated[name] = raw
+            else:
+                raise ValueError(f"Argument '{name}' must be a string, got {type(raw).__name__}")
+        elif expected == "integer":
+            if isinstance(raw, bool):
+                raise ValueError(f"Argument '{name}' must be an integer, got boolean")
+            if isinstance(raw, int):
+                validated[name] = raw
+            elif isinstance(raw, float) and raw.is_integer():
+                validated[name] = int(raw)
+            else:
+                raise ValueError(f"Argument '{name}' must be an integer, got {type(raw).__name__}")
+        elif expected == "number":
+            if isinstance(raw, bool):
+                raise ValueError(f"Argument '{name}' must be a number, got boolean")
+            if isinstance(raw, (int, float)):
+                validated[name] = raw
+            else:
+                raise ValueError(f"Argument '{name}' must be a number, got {type(raw).__name__}")
+        elif expected == "boolean":
+            if isinstance(raw, bool):
+                validated[name] = raw
+            else:
+                raise ValueError(f"Argument '{name}' must be a boolean, got {type(raw).__name__}")
+        else:
+            # Unknown schema types (object/array/enum etc.) pass through unchanged.
+            validated[name] = raw
+
+    return validated
+
+
 class ToolWrapper:
     """Wraps a ToolDef to support async execution and metadata access."""
 
@@ -278,13 +343,16 @@ class ToolWrapper:
             p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
         )
         if accepts_kwargs:
-            # **kwargs functions (e.g. MCP tool bridges) receive everything.
-            filtered_args = dict(arguments)
+            # **kwargs functions (e.g. MCP tool bridges) receive everything —
+            # validate against the MCP input_schema when one was provided (S-11).
+            filtered_args = validate_tool_arguments(arguments, self.signature)
         else:
+            # Validate against the declared args_schema, then bind to parameters.
+            validated_args = validate_tool_arguments(arguments, self.signature)
             filtered_args = {}
             for param_name in sig.parameters:
-                if param_name in arguments:
-                    filtered_args[param_name] = arguments[param_name]
+                if param_name in validated_args:
+                    filtered_args[param_name] = validated_args[param_name]
 
         result = self._func(**filtered_args)
 
