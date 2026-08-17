@@ -118,11 +118,24 @@ Threat model, confirmed vulnerabilities from the audit, and the security require
 
 ## 5. Security Test Plan (per release)
 
-1. **Unit/integration**: auth (signup/login/refresh/revoke), workspace isolation (user A cannot read user B memory/agents/proposals — automated cross-tenant test), role enforcement, destructive-tool gate, path-scope rejection, SSRF block tests.
-2. **Dynamic**: run the app with `JWT_SECRET_KEY` set and assert every legacy endpoint requires auth; fuzz proposal/review payloads (malformed JSON, huge strings, type confusion).
-3. **Static**: `bandit` in CI on `agentfactory/`; `pip-audit` on lockfile; `ruff` security rules.
-4. **Manual pre-release**: marketplace install of a known-bad skill must fail validation; MCP server with no timeouts must not hang the worker; terminal session must not escape the workspace root.
-5. **Pentest checklist** (v1.0 before public hosting): all STRIDE items above reviewed and signed off in `docs/security.md` revision log.
+Automated coverage lives in the test suite — each item maps to the file that
+enforces it. New regressions must ship a test in the same file (Phase 0 rule).
+
+| # | Check | Automated where | Status |
+|---|-------|-----------------|--------|
+| 1 | Auth: signup/login/refresh/revoke, password hashing (argon2) | `tests/test_platform_api.py`, `tests/test_platform_phase2.py` | ✅ automated |
+| 2 | Workspace isolation: user A cannot read user B agents/runs/memories; terminal membership (403) | `tests/test_platform_api.py`, `tests/test_platform_phase5.py::TestTerminal` | ✅ automated |
+| 3 | Role enforcement: member cannot install marketplace items / manage agents | `tests/test_platform_phase6.py::TestMarketplaceAbuse` | ✅ automated |
+| 4 | Custom tool gate: compile + AST static scan, banned calls (`subprocess`, `os.system`), env allowlist (nothing leaks without an allowlist) | `tests/test_platform_phase4.py` | ✅ automated |
+| 5 | Marketplace abuse: bad item type, unknown item, spoofed "safe" label with dangerous code → 422 + audit-logged failure | `tests/test_platform_phase6.py::TestMarketplaceAbuse` | ✅ automated |
+| 6 | MCP: command allowlist, env allowlist per server, per-tool enablement, no-timeout hang guard | `tests/test_platform_phase4.py` | ✅ automated |
+| 7 | Terminal: destructive-command confirm flow, cwd pinned to workspace root (escape → 422), kill-on-disconnect | `tests/test_platform_phase5.py::TestTerminal` | ✅ automated |
+| 8 | Autonomy guardrails: protected-branch push block, path allowlist enforced in `_execute_tool` | `tests/test_platform_phase5.py` | ✅ automated |
+| 9 | SPA serving: path traversal cannot escape the SPA directory | `tests/test_platform_phase6.py::TestSpaServing` | ✅ automated |
+| 10 | Static: `bandit -r agentfactory -ll`, `pip-audit -r requirements.txt` | `.github/workflows/ci.yml` (security job) | ✅ automated |
+| 11 | Types: mypy gate on the platform surface | `.github/workflows/ci.yml` (test job) | ✅ automated |
+| 12 | Dynamic/manual pre-release: run with `AGENTFACTORY_JWT_SECRET` set; fuzz proposal payloads; verify no token leaks in logs | manual checklist | ⏳ pre-release |
+| 13 | Pentest checklist (before public hosting): all STRIDE items above reviewed and signed off in this file's revision log | manual checklist | ⏳ pre-release |
 
 ---
 

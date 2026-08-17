@@ -366,8 +366,9 @@ def update_server(
     params.extend([server_id, workspace["id"]])
     conn = db.get_db()
     try:
+        # nosec B608: SET clause built from hardcoded column names; values parameterized.
         conn.execute(
-            f"UPDATE mcp_servers SET {', '.join(updates)} WHERE id = ? AND workspace_id = ?",
+            f"UPDATE mcp_servers SET {', '.join(updates)} WHERE id = ? AND workspace_id = ?",  # nosec B608
             params,
         )
         conn.commit()

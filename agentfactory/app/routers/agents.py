@@ -243,8 +243,9 @@ def update_agent(
 
     conn = db.get_db()
     try:
+        # nosec B608: SET clause built from pydantic-validated field names; values parameterized.
         cur = conn.execute(
-            f"UPDATE agents SET {', '.join(updates)} WHERE id = ? AND workspace_id = ?",
+            f"UPDATE agents SET {', '.join(updates)} WHERE id = ? AND workspace_id = ?",  # nosec B608
             params,
         )
         conn.commit()

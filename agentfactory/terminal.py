@@ -77,7 +77,7 @@ class TerminalSession:
         self.id = uuid.uuid4().hex
         self.workspace_root = workspace_root
         self.workspace_id: Optional[str] = None  # set by the manager
-        self.created_at = None  # set by the manager
+        self.created_at: Optional[str] = None  # set by the manager
         self.pid: Optional[int] = None
         self.master_fd: Optional[int] = None
         self._output: Queue = Queue()
@@ -120,15 +120,18 @@ class TerminalSession:
 
     def _read_loop(self) -> None:
         """Continuously drain the PTY master into the output queue."""
+        master_fd = self.master_fd
+        if master_fd is None:
+            return
         while not self._closed:
             try:
-                rlist, _, _ = select.select([self.master_fd], [], [], 0.25)
+                rlist, _, _ = select.select([master_fd], [], [], 0.25)
             except (OSError, ValueError):
                 break
             if not rlist:
                 continue
             try:
-                data = os.read(self.master_fd, 65536)
+                data = os.read(master_fd, 65536)
             except OSError as e:
                 if e.errno in (errno.EIO, errno.EBADF):  # child exited / fd closed
                     self._closed = True
@@ -157,6 +160,10 @@ class TerminalSession:
         if self._closed:
             return {"blocked": True, "reason": "Session is closed", "command": data}
 
+        master_fd = self.master_fd
+        if master_fd is None:
+            return {"blocked": True, "reason": "Session is closed", "command": data}
+
         with self._lock:
             if self.pending_confirmation is not None:
                 if data.strip() == self.pending_confirmation.strip():
@@ -164,7 +171,7 @@ class TerminalSession:
                     self.pending_confirmation = None
                     self.pending_reason = None
                     try:
-                        os.write(self.master_fd, command.encode("utf-8", errors="replace"))
+                        os.write(master_fd, command.encode("utf-8", errors="replace"))
                     except OSError:
                         return {"blocked": True, "reason": "Session is closed", "command": command}
                     return {"blocked": False, "confirmed": True}
@@ -180,7 +187,7 @@ class TerminalSession:
                 self.pending_reason = reason
                 return {"blocked": True, "command": data, "reason": reason}
             try:
-                os.write(self.master_fd, data.encode("utf-8", errors="replace"))
+                os.write(master_fd, data.encode("utf-8", errors="replace"))
             except OSError:
                 return {"blocked": True, "reason": "Session is closed", "command": data}
             return {"blocked": False}
@@ -260,7 +267,8 @@ class TerminalManager:
             if os.path.commonpath([root, candidate]) != root:
                 raise ValueError(f"cwd must stay inside the workspace root: {cwd}")
             root = candidate
-        session = TerminalSession(root, shell=shell)
+        # nosec B604: shell name is split into argv — no shell metacharacter evaluation.
+        session = TerminalSession(root, shell=shell)  # nosec B604
         session.workspace_id = workspace_id
         session.created_at = datetime.now(timezone.utc).isoformat()
         with self._lock:

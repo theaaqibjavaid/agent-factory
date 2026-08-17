@@ -70,7 +70,8 @@ class Settings(BaseSettings):
     # Approval Server
     # ============================================================
     approval_server_port: int = Field(default=8000, alias="APPROVAL_SERVER_PORT")
-    approval_server_host: str = Field(default="0.0.0.0", alias="APPROVAL_SERVER_HOST")
+    # nosec B104: bind-all default is overridable via env for containers.
+    approval_server_host: str = Field(default="0.0.0.0", alias="APPROVAL_SERVER_HOST")  # nosec B104
 
     # ============================================================
     # MCP Configuration

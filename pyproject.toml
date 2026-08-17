@@ -56,6 +56,10 @@ openai = ["langchain-openai>=0.2.0"]
 anthropic = ["langchain-anthropic>=0.2.0"]
 langfuse = ["langfuse>=2.0"]
 search = ["langchain-community>=0.3.0", "duckduckgo-search>=6.0"]
+# AgentFactory Studio / platform control plane (Phase 1-5). Pulls in the API
+# server extras (websockets, uvloop) needed to self-host the platform:
+#   pip install agentfactory[platform]   -> uvicorn[standard] (API server)
+platform = ["uvicorn[standard]>=0.29.0"]
 all = [
     "langchain-google-genai>=2.0",
     "langchain-openai>=0.2.0",
@@ -85,6 +89,22 @@ agentfactory = ["py.typed"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+# Coverage gate — scoped to the platform surface (Phase 6.1). The legacy
+# approval_server.py is excluded the same way it is excluded from the mypy
+# gate: it is the v1 control plane, tracked separately.
+[tool.coverage.run]
+source = [
+    "agentfactory/app",
+    "agentfactory/runtime.py",
+    "agentfactory/terminal.py",
+    "agentfactory/validation.py",
+    "agentfactory/custom_tools.py",
+]
+omit = ["agentfactory/app/approval_server.py"]
+
+[tool.coverage.report]
+fail_under = 80
 
 [tool.black]
 line-length = 100

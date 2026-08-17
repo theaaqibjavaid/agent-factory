@@ -152,7 +152,8 @@ def run(port: int, reload: bool, worker_only: bool, server_only: bool):
         server_proc = subprocess.Popen([
             sys.executable, "-m", "uvicorn",
             "agentfactory.app.approval_server:app",
-            "--host", "0.0.0.0",
+            # nosec B104: bind-all for containers/remote; override with --host.
+            "--host", "0.0.0.0",  # nosec B104
             "--port", str(port),
             "--reload" if reload else "--no-reload",
         ])

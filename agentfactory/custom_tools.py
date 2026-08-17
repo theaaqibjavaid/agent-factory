@@ -170,13 +170,14 @@ def load_custom_tool(
     )
     module_name = f"_custom_tool_{tool_name}"
     module = types.ModuleType(module_name)
-    module.__file__ = os.path.join(sandbox_dir, f"{tool_name}.py")
+    module.__file__ = os.path.join(sandbox_dir or "", f"{tool_name}.py")
     module.__name__ = module_name
-    module.__builtins__ = _sandbox_builtins(_make_import_hook(env_allow or []))
+    setattr(module, "__builtins__", _sandbox_builtins(_make_import_hook(env_allow or [])))
 
     try:
+        # nosec B102: sandboxed namespace above; code is compile + AST validated before this point.
         compiled = compile(code, module.__file__, "exec")
-        exec(compiled, module.__dict__)  # noqa: S102 — sandboxed namespace above
+        exec(compiled, module.__dict__)  # nosec B102
     except Exception as e:  # noqa: BLE001 — surfaced as a tool error
         raise CustomToolError(f"Custom tool '{tool_name}' failed to load: {e}") from e
 

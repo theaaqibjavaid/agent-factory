@@ -159,8 +159,9 @@ def update_connection(
     params.extend([conn_id, workspace["id"]])
     conn = db.get_db()
     try:
+        # nosec B608: SET clause built from hardcoded column names; values parameterized.
         conn.execute(
-            f"UPDATE model_connections SET {', '.join(updates)} WHERE id = ? AND workspace_id = ?",
+            f"UPDATE model_connections SET {', '.join(updates)} WHERE id = ? AND workspace_id = ?",  # nosec B608
             params,
         )
         conn.commit()

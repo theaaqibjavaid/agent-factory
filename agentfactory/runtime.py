@@ -749,7 +749,8 @@ def _update_run(run_id: str, **fields: Any) -> None:
     sets = ", ".join(f"{k} = ?" for k in fields)
     conn = db.get_db()
     try:
-        conn.execute(f"UPDATE agent_runs SET {sets}, updated_at = ? WHERE id = ?",
+        # nosec B608: SET clause built from literal kwargs at fixed call sites; values parameterized.
+        conn.execute(f"UPDATE agent_runs SET {sets}, updated_at = ? WHERE id = ?",  # nosec B608
                      (*fields.values(), _now_iso(), run_id))
         conn.commit()
     finally:

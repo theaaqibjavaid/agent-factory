@@ -20,13 +20,61 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt pytest pytest-asyncio pytest-cov httpx ruff
+          pip install -r requirements.txt pytest pytest-asyncio pytest-cov httpx ruff mypy
 
       - name: Lint — undefined names (real bugs)
         run: ruff check --select F821 agentfactory tests
 
-      - name: Test
-        run: pytest -q
+      - name: Typecheck — platform surface (mypy)
+        # Scoped to the modules we own; the legacy SDK has pre-existing
+        # findings tracked separately. --follow-imports=skip keeps the gate
+        # hermetic (no stubs needed for third-party packages).
+        run: |
+          mypy agentfactory/app agentfactory/runtime.py agentfactory/terminal.py \
+               agentfactory/validation.py agentfactory/custom_tools.py \
+               --follow-imports=skip --ignore-missing-imports
+
+      - name: Test + coverage gate (platform surface)
+        # Source/omit/fail-under live in pyproject.toml [tool.coverage.*];
+        # approval_server.py (legacy v1) is excluded the same way mypy is.
+        run: pytest -q --cov --cov-report=term-missing --cov-fail-under=80
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install scanners
+        run: pip install bandit pip-audit
+
+      - name: Bandit — static security scan (Python)
+        run: bandit -r agentfactory -q -ll
+
+      - name: pip-audit — vulnerable dependency scan
+        run: pip-audit -r requirements.txt
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install UI dependencies
+        working-directory: web
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck — Studio UI
+        working-directory: web
+        run: bun tsc -b --noEmit
+
+      - name: Build — Studio SPA
+        working-directory: web
+        run: bun run build
 
   build:
     runs-on: ubuntu-latest
@@ -47,3 +95,9 @@ jobs:
           python -m venv /tmp/venv
           /tmp/venv/bin/pip install dist/*.whl
           /tmp/venv/bin/agentfactory --version
+
+      - name: Smoke — platform imports in a clean venv
+        run: |
+          /tmp/venv/bin/pip install 'uvicorn[standard]'
+          /tmp/venv/bin/python -c \
+            "from agentfactory.app.main import app; import agentfactory.terminal, agentfactory.runtime; print('platform imports OK')"

@@ -10,7 +10,7 @@ import os
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException
@@ -152,7 +152,7 @@ def _create_default_workspace(user_id: str, email: str) -> str:
 
 
 def _issue_tokens_for(user: dict) -> dict:
-    tokens = security.create_token_pair(user["id"])
+    tokens: Dict[str, Any] = security.create_token_pair(user["id"])
     tokens["user"] = user_payload(user)
     return tokens
 
@@ -352,7 +352,7 @@ def _exchange_github(code: str, redirect_uri: str, client_id: str, client_secret
 
 def _oauth_login(provider: str, profile: dict) -> dict:
     """Find or create a user for an OAuth profile, then link the account."""
-    provider_sub = profile.get("provider_sub")
+    provider_sub = str(profile.get("provider_sub") or "")
     user = _get_user_by_oauth(provider, provider_sub)
 
     if user is None:

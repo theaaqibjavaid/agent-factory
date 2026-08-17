@@ -5,11 +5,33 @@
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://www.python.org/downloads/)
 [![Production Ready](https://img.shields.io/badge/Status-Production--Ready-green)](https://github.com/theaaqibjavaid/agent-factory)
 [![Documentation](https://img.shields.io/badge/Docs-Ready-orange)](https://github.com/theaaqibjavaid/agent-factory/tree/main/docs)
-[![Tests](https://img.shields.io/badge/Tests-90%20Passing-brightgreen)](https://github.com/theaaqibjavaid/agent-factory/actions)
+[![Tests](https://img.shields.io/badge/Tests-201%20Passing-brightgreen)](https://github.com/theaaqibjavaid/agent-factory/actions)
+[![Coverage](https://img.shields.io/badge/Coverage-84%25-yellow)](https://github.com/theaaqibjavaid/agent-factory/actions)
 
-AgentFactory is a universal, open-source Python SDK for building production-grade AI agents of any type.
+AgentFactory is a universal, open-source Python SDK — and a full Studio platform — for building and operating production-grade AI agents of any type.
 
-A single pip install gives you LLM failover, persistent memory, native tool calling, streaming, skill marketplace, and human-in-the-loop approvals.
+A single `pip install agentfactory[platform]` gives you the SDK (LLM failover, persistent memory, native tool calling, streaming, skill marketplace, human-in-the-loop approvals) **plus** a multi-user Studio: sign up, build agents with custom tools/skills/MCP servers, run them with full observability, and operate them from a built-in terminal.
+
+---
+
+## Studio (self-hosted dashboard)
+
+```bash
+# SDK + platform extra (API server), then build the UI and run one process:
+pip install 'agentfactory[platform]'
+cd web && bun install && bun run build && cd ..
+AGENTFACTORY_SPA_DIR="$(pwd)/web/dist" AGENTFACTORY_JWT_SECRET="$(openssl rand -hex 32)" \
+  uvicorn agentfactory.app.main:app --host 0.0.0.0 --port 8000
+```
+
+Open `http://localhost:8000`, sign up, and you get: agents (constitution +
+guardrails), custom tools (validated + sandboxed with env allowlists), skills
+(with dependency resolution), MCP servers (per-tool enablement), model
+connections (bring-your-own key), a marketplace, a PTY terminal, cost/token
+dashboards with budget alerts, and Discord/Gmail/webhook notifications.
+
+Docker one-liner and the production checklist: [docs/self-host.md](docs/self-host.md).
+Migrating an existing v1 deployment: [docs/migration-v1-v2.md](docs/migration-v1-v2.md).
 
 ---
 
@@ -28,7 +50,13 @@ A single pip install gives you LLM failover, persistent memory, native tool call
 | Feedback Learning | learn_from_correction() for agent self-improvement |
 | Human-in-the-Loop | FastAPI approval server with Discord/Gmail notifications |
 | Safety Levels | @tool decorator with SAFE / MODIFIED / DESTRUCTIVE classification |
-| Production Packaging | PEP 561 compliant, pyproject.toml, CLI entry points |
+| Studio Platform | Multi-user API + dashboard: agents, runs, tools, skills, MCP, models |
+| Custom Tools | Validated Python tools in a sandbox with per-tool env allowlists |
+| Terminal | PTY shell in the browser with destructive-command confirmation |
+| Observability | Run events, cost/token dashboards, daily budget alerts (80%/100%) |
+| Autonomy Guardrails | Per-agent constitution, protected branches, path allowlists |
+| Marketplace | Curated tools/skills/MCP catalog with trust indicators + audit trail |
+| Production Packaging | PEP 561 compliant, pyproject.toml, CLI entry points, Dockerfile |
 
 ---
 
@@ -68,6 +96,10 @@ result = await agent.run("Implement user authentication")
 
 ## Documentation
 
+Full index: docs/SUMMARY.md
+
+- Self-Host Studio: docs/self-host.md
+- Migrate v1 → v2: docs/migration-v1-v2.md
 - Architecture: docs/architecture.md
 - Quick Start: docs/quick-start.md
 - CLI Reference: docs/cli-reference.md
@@ -80,6 +112,7 @@ result = await agent.run("Implement user authentication")
 - API Reference: docs/api-reference.md
 - Environment Variables: docs/env-vars.md
 - Production Audit: docs/AUDIT.md
+- Security (incl. test plan): docs/security.md
 
 ---
 

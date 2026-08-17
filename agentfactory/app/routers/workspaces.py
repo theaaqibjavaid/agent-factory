@@ -169,7 +169,8 @@ def update_workspace(
     params.append(workspace["id"])
     conn = db.get_db()
     try:
-        conn.execute(f"UPDATE workspaces SET {', '.join(updates)} WHERE id = ?", params)
+        # nosec B608: SET clause built from hardcoded column names; values parameterized.
+        conn.execute(f"UPDATE workspaces SET {', '.join(updates)} WHERE id = ?", params)  # nosec B608
         conn.commit()
         row = conn.execute("SELECT * FROM workspaces WHERE id = ?", (workspace["id"],)).fetchone()
     finally:

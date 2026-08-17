@@ -246,15 +246,15 @@ def _open_mode_is_write(node: ast.Call) -> bool:
     return False
 
 
-def _find_function(tree: ast.AST, name: Optional[str]) -> Optional[ast.FunctionDef]:
+def _find_function(tree: ast.Module, name: Optional[str]) -> Optional[ast.FunctionDef]:
     """Find the tool entry point: by name, or the first top-level function."""
     for node in tree.body:
         if isinstance(node, ast.FunctionDef) and (name is None or node.name == name):
             return node
     # Fall back to any function (e.g. if wrapped in an if-block)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and (name is None or node.name == name):
-            return node
+    for walked in ast.walk(tree):
+        if isinstance(walked, ast.FunctionDef) and (name is None or walked.name == name):
+            return walked
     return None
 
 
@@ -267,7 +267,7 @@ def _render_signature_schema(fn: ast.FunctionDef) -> Dict[str, Any]:
         if arg.arg in ("self", "cls"):
             continue
         prop: Dict[str, Any] = {}
-        default = None
+        default: Any = None
 
         # annotate type
         if arg.annotation is not None:

@@ -106,7 +106,8 @@ _CATALOG: Dict[str, Any] = {
             "version": "1.0.0",
             "transport": "stdio",
             "command": "npx",
-            "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+            # nosec B108: curated catalog default scope; users pick the path.
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],  # nosec B108
             "description": "Official MCP filesystem server (scoped to a directory).",
         },
         {

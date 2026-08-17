@@ -11,8 +11,9 @@ bridge). Run with: ``uvicorn agentfactory.app.main:app``.
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from agentfactory.app import db
 from agentfactory.app.routers import (
@@ -77,3 +78,30 @@ app.include_router(observability.router, prefix="/api/v1")
 def health():
     """Health check — returns no tokens, no sensitive data."""
     return {"status": "ok", "service": "AgentFactory Platform API", "version": "0.2.0"}
+
+
+# ---------------------------------------------------------------------------
+# Studio SPA static serving (Phase 6.2 — self-host one process for API + UI)
+# ---------------------------------------------------------------------------
+# When AGENTFACTORY_SPA_DIR points at a built Studio (web/dist), the API also
+# serves the SPA: real files are returned as-is, and any other GET falls back
+# to index.html so react-router deep links work. API routes registered above
+# always win because they are matched before this catch-all.
+
+_SPA_DIR = os.getenv("AGENTFACTORY_SPA_DIR", "")
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def spa_fallback(full_path: str):
+    """Serve the Studio SPA when built assets are present (self-host mode)."""
+    if not _SPA_DIR:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    index_path = os.path.join(_SPA_DIR, "index.html")
+    requested = os.path.join(_SPA_DIR, full_path)
+    # Serve real static assets; never resolve paths outside the SPA directory.
+    if full_path and os.path.isfile(requested) and os.path.commonpath([_SPA_DIR, os.path.abspath(requested)]) == os.path.abspath(_SPA_DIR):
+        return FileResponse(requested)
+    if os.path.isfile(index_path):
+        return FileResponse(index_path)
+    raise HTTPException(status_code=404, detail="Not found")

@@ -289,8 +289,9 @@ def update_tool(
     params.extend([tool_id, workspace["id"]])
     conn = db.get_db()
     try:
+        # nosec B608: SET clause built from hardcoded column names; values parameterized.
         conn.execute(
-            f"UPDATE tool_registrations SET {', '.join(updates)} WHERE id = ? AND workspace_id = ?",
+            f"UPDATE tool_registrations SET {', '.join(updates)} WHERE id = ? AND workspace_id = ?",  # nosec B608
             params,
         )
         conn.commit()
