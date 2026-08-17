@@ -15,7 +15,20 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from agentfactory.app import db
-from agentfactory.app.routers import agents, auth, memories, proposals, runs, users, workspaces
+from agentfactory.app.routers import (
+    agents,
+    auth,
+    marketplace,
+    mcp,
+    memories,
+    models,
+    proposals,
+    runs,
+    skills,
+    tools,
+    users,
+    workspaces,
+)
 
 
 @asynccontextmanager
@@ -49,6 +62,11 @@ app.include_router(agents.router, prefix="/api/v1")
 app.include_router(runs.router, prefix="/api/v1")
 app.include_router(proposals.router, prefix="/api/v1")
 app.include_router(memories.router, prefix="/api/v1")
+app.include_router(tools.router, prefix="/api/v1")
+app.include_router(skills.router, prefix="/api/v1")
+app.include_router(mcp.router, prefix="/api/v1")
+app.include_router(models.router, prefix="/api/v1")
+app.include_router(marketplace.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["system"])

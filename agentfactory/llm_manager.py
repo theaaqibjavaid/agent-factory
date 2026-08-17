@@ -10,11 +10,12 @@ Usage:
     llm = manager.get_active_llm()
 """
 
+import json
 import os
 import time
-import json
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Dict, List, Optional
+
 import structlog
 
 from agentfactory.config import settings
@@ -40,12 +41,13 @@ if settings.has_langfuse:
 @dataclass
 class LLMConfig:
     """Configuration for a single LLM provider/model."""
-    provider: str        # "google", "openai", "anthropic"
+    provider: str        # "google", "openai", "anthropic", "openai_compatible"
     model: str           # e.g., "gemini-2.5-flash"
     api_key_env: str     # Environment variable name
     temperature: float = 0.2
     max_tokens: Optional[int] = None
     is_free_tier: bool = False
+    base_url: Optional[str] = None  # OpenAI-compatible endpoints (Phase 4.4)
 
 
 @dataclass
@@ -310,6 +312,18 @@ class FailoverLLMManager:
                 max_tokens=config.max_tokens,
             )
 
+        elif config.provider in ("openai_compatible", "ollama"):
+            # Any OpenAI-compatible endpoint: Ollama, vLLM, LM Studio, OpenRouter, ...
+            from langchain_openai import ChatOpenAI
+
+            return ChatOpenAI(
+                model=config.model,
+                temperature=config.temperature,
+                api_key=os.getenv(config.api_key_env) or "local",
+                base_url=config.base_url,
+                max_tokens=config.max_tokens,
+            )
+
         raise ValueError(f"Unknown provider: {config.provider}")
 
     def generate_with_tools(
@@ -402,8 +416,6 @@ class FailoverLLMManager:
     def _raw_tool_call(self, llm, messages, tools):
         """Fallback for providers without bind_tools support."""
         # Convert messages to provider format and add tools
-        import json
-
         if "openai" in type(llm).__name__.lower():
             return llm.client.chat.completions.create(
                 model=llm.model_name,

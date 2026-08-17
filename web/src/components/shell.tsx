@@ -6,14 +6,18 @@ import {
   Activity,
   Bot,
   Boxes,
+  Cable,
   CheckCheck,
   Cpu,
   Database,
   Gauge,
+  Hammer,
   LogOut,
   Menu,
   Settings,
   ShieldAlert,
+  Store,
+  Wand2,
   X,
 } from "lucide-react";
 import { cn } from "../lib/utils";
@@ -27,8 +31,14 @@ const NAV = [
   { to: "/app/runs", label: "Run Console", icon: Activity },
   { to: "/app/approvals", label: "Approvals", icon: CheckCheck },
   { to: "/app/memory", label: "Memory", icon: Database },
+];
+
+const EXTENSIBILITY_NAV = [
+  { to: "/app/tools", label: "Tools", icon: Hammer },
+  { to: "/app/skills", label: "Skills", icon: Wand2 },
+  { to: "/app/mcp", label: "MCP Servers", icon: Cable },
+  { to: "/app/marketplace", label: "Marketplace", icon: Store },
   { to: "/app/models", label: "Models", icon: Cpu },
-  { to: "/app/settings", label: "Settings", icon: Settings },
 ];
 
 export function AppShell() {
@@ -71,12 +81,33 @@ export function AppShell() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto scroll-thin px-3 py-2">
         {NAV.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
+            onClick={() => setMobileOpen(false)}
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )
+            }
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </NavLink>
+        ))}
+        <p className="px-3 pb-1 pt-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+          Extensibility
+        </p>
+        {EXTENSIBILITY_NAV.map(({ to, label, icon: Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
             onClick={() => setMobileOpen(false)}
             className={({ isActive }) =>
               cn(

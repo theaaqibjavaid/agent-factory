@@ -12,6 +12,10 @@ import { AgentDetailPage } from "./pages/agent-detail-page";
 import { RunsPage } from "./pages/runs-page";
 import { ApprovalsPage } from "./pages/approvals-page";
 import { MemoryPage } from "./pages/memory-page";
+import { ToolsPage } from "./pages/tools-page";
+import { SkillsPage } from "./pages/skills-page";
+import { McpPage } from "./pages/mcp-page";
+import { MarketplacePage } from "./pages/marketplace-page";
 import { ModelsPage } from "./pages/models-page";
 import { SettingsPage } from "./pages/settings-page";
 
@@ -57,6 +61,10 @@ export default function App() {
             <Route path="runs" element={<RunsPage />} />
             <Route path="approvals" element={<ApprovalsPage />} />
             <Route path="memory" element={<MemoryPage />} />
+            <Route path="tools" element={<ToolsPage />} />
+            <Route path="skills" element={<SkillsPage />} />
+            <Route path="mcp" element={<McpPage />} />
+            <Route path="marketplace" element={<MarketplacePage />} />
             <Route path="models" element={<ModelsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>

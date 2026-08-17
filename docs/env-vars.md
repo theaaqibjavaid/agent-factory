@@ -127,3 +127,33 @@ with `uvicorn agentfactory.app.main:app --port 8000`.
 workspace settings JSON contains `"allow_destructive": true` (set via
 `PATCH /api/v1/workspaces/{ws}`). Gated agents (`hitl_mode=gate`) are the
 supported way to run destructive tasks with human approval.
+
+### Extensibility surfaces (Phase 4)
+
+Custom tools, skills, MCP servers, model connections, and marketplace installs
+are managed through the platform API and resolved by the runtime at run time:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AGENTFACTORY_WORKSPACE_ROOT` | Sandbox root for custom tool code; each workspace gets a subdirectory (path-scope) | `~/.agentfactory/workspaces` |
+| `AGENTFACTORY_MCP_ALLOWED_COMMANDS` | Comma-separated MCP server command allowlist (basenames) | `npx,uvx,python,python3,node,deno,bun` |
+
+Endpoints (all workspace-scoped under `/api/v1/workspaces/{ws}`):
+
+- `.../tools` — merged catalog (built-ins + custom + marketplace); `POST`
+  creates a custom tool after validation (compile + static scan + schema
+  render); `POST .../tools/validate` dry-runs the editor. Custom code runs in
+  a restricted namespace (safe stdlib imports only, no subprocess/socket/eval)
+  with metadata (safety/cost) taken from the registration row — never the code.
+- `.../skills` — create/update/delete skills; instructions are injected into
+  the system prompt of any agent that lists the skill.
+- `.../mcp` — stdio/SSE server registrations with env allowlists;
+  `POST .../mcp/test` probes a connection and lists its tools (hardened
+  Phase 0.7 client). Commands must be in `AGENTFACTORY_MCP_ALLOWED_COMMANDS`.
+- `.../models` — model connections (provider, model, base URL, `key_ref` env
+  var name — keys are never stored); `POST .../models/{id}/test-call` makes a
+  minimal real call. `openai_compatible`/`ollama` providers accept a `base_url`
+  (OpenRouter, vLLM, LM Studio, Ollama).
+- `/api/v1/marketplace` (public catalog) + `.../marketplace/install` (creates
+  registrations, records an audit event with validation findings) +
+  `.../marketplace/installs` (audit log).

@@ -12,8 +12,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { api } from "../lib/api";
-import type { Agent, AgentRender, Run } from "../lib/types";
-import { BUILTIN_TOOL_CATALOG, RANKS } from "../lib/types";
+import type { Agent, AgentRender, Run, ToolEntry } from "../lib/types";
+import { RANKS } from "../lib/types";
 import { cn, formatUsd } from "../lib/utils";
 import { useWorkspace } from "../components/workspaces";
 import { RunConsole, RunStatusBadge } from "../components/run-console";
@@ -27,6 +27,7 @@ export function AgentDetailPage() {
   const navigate = useNavigate();
   const [agent, setAgent] = useState<Agent | null>(null);
   const [render, setRender] = useState<AgentRender | null>(null);
+  const [toolCatalog, setToolCatalog] = useState<ToolEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -40,12 +41,14 @@ export function AgentDetailPage() {
   const load = useCallback(async () => {
     if (!workspace || !agentId) return;
     try {
-      const [a, r] = await Promise.all([
+      const [a, r, tc] = await Promise.all([
         api.get<Agent>(`/api/v1/workspaces/${workspace.id}/agents/${agentId}`),
         api.get<AgentRender>(`/api/v1/workspaces/${workspace.id}/agents/${agentId}/render`),
+        api.get<{ tools: ToolEntry[] }>(`/api/v1/workspaces/${workspace.id}/tools`),
       ]);
       setAgent(a);
       setRender(r);
+      setToolCatalog(tc.tools);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load agent");
@@ -144,7 +147,6 @@ export function AgentDetailPage() {
     );
   }
 
-  const toolCatalog = new Map(BUILTIN_TOOL_CATALOG.map((t) => [t.name, t]));
   const toggleTool = (name: string) => {
     const tools = agent.tools.includes(name)
       ? agent.tools.filter((t) => t !== name)
@@ -249,11 +251,11 @@ export function AgentDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid max-h-72 grid-cols-1 gap-1.5 overflow-y-auto scroll-thin sm:grid-cols-2">
-                  {BUILTIN_TOOL_CATALOG.map((tool) => {
+                  {toolCatalog.map((tool) => {
                     const on = agent.tools.includes(tool.name);
                     return (
                       <button
-                        key={tool.name}
+                        key={`${tool.source}-${tool.name}`}
                         type="button"
                         onClick={() => toggleTool(tool.name)}
                         className={cn(
@@ -265,7 +267,9 @@ export function AgentDetailPage() {
                       >
                         <span className="min-w-0">
                           <span className="block truncate font-mono text-xs font-medium">{tool.name}</span>
-                          <span className="block truncate text-[11px] text-muted-foreground">{tool.category}</span>
+                          <span className="block truncate text-[11px] text-muted-foreground">
+                            {tool.category} · {tool.source}
+                          </span>
                         </span>
                         <Badge tone={SAFETY_TONE[tool.safety_level]}>{tool.safety_level}</Badge>
                       </button>

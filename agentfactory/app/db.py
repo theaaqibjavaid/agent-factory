@@ -155,6 +155,7 @@ CREATE TABLE IF NOT EXISTS mcp_servers (
     env_allow    TEXT NOT NULL DEFAULT '[]',
     timeout      REAL NOT NULL DEFAULT 10.0,
     enabled      INTEGER NOT NULL DEFAULT 1,
+    metadata     TEXT NOT NULL DEFAULT '{}',     -- discovered tools + per-tool enablement (Phase 4.3)
     created_at   TEXT NOT NULL
 );
 
@@ -168,6 +169,21 @@ CREATE TABLE IF NOT EXISTS model_connections (
     enabled      INTEGER NOT NULL DEFAULT 1,
     created_at   TEXT NOT NULL
 );
+
+-- Marketplace install audit trail (Phase 4.5)
+CREATE TABLE IF NOT EXISTS marketplace_installs (
+    id           TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    item_type    TEXT NOT NULL,                    -- tool | skill | mcp | model
+    item_id      TEXT NOT NULL,
+    item_name    TEXT NOT NULL,
+    publisher    TEXT,
+    status       TEXT NOT NULL DEFAULT 'installed', -- installed | failed
+    findings     TEXT NOT NULL DEFAULT '[]',        -- validation/safety findings JSON
+    installed_by TEXT REFERENCES users(id),
+    created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_marketplace_installs_workspace ON marketplace_installs(workspace_id);
 """
 
 # Schema creation is cached per database path so we don't re-run DDL on every
