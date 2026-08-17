@@ -3,7 +3,8 @@ AgentFactory CLI — Developer tooling command line interface.
 
 Commands:
     init      - Configure .env, check directory mappings, validate setup
-    run       - Start FastAPI server + background worker
+    studio    - Run the full Studio platform (API + UI) in one process  ← use this
+    run       - Start the LEGACY v1 approval server + worker (older SDK flow)
     create-agent  - Generate a new agent config from template
     list-tools  - List all registered tools
     status    - Check current approval server status
@@ -131,6 +132,70 @@ def init(force: bool):
     click.echo("     python -m agentfactory.agents.worker --watch")
 
 
+def _repo_root() -> Path:
+    """Repository root (parent of the agentfactory package)."""
+    return Path(__file__).resolve().parent.parent
+
+
+@cli.command()
+@click.option("--port", default=8000, show_default=True, help="Port to serve the Studio on")
+@click.option("--host", default="0.0.0.0", show_default=True, help="Bind address")
+@click.option("--no-spa", is_flag=True, help="API only — do not build or serve the Studio UI")
+def studio(port: int, host: str, no_spa: bool):
+    """
+    Run the full AgentFactory Studio (platform API + UI) in ONE process.
+
+    This is the single command for local testing: it builds the Studio UI if
+    needed and serves the API + dashboard on one port
+    (http://localhost:8000). The platform API (agentfactory.app.main:app) is
+    the v2 multi-user backend; prefer this over the legacy `run` command.
+    """
+    repo_root = _repo_root()
+    spa_dir = repo_root / "web" / "dist"
+    env = os.environ.copy()
+
+    if not no_spa:
+        if not (spa_dir / "index.html").exists():
+            click.echo("🔨 Studio UI not built — building with bun...")
+            web_dir = repo_root / "web"
+            try:
+                subprocess.run(["bun", "install"], cwd=str(web_dir), check=True)
+                subprocess.run(["bun", "run", "build"], cwd=str(web_dir), check=True)
+            except FileNotFoundError:
+                click.echo("⚠️  bun not found — starting API only (no UI). Install bun: https://bun.sh")
+                no_spa = True
+            except subprocess.CalledProcessError:
+                click.echo("⚠️  UI build failed — starting API only. Check the build output above.")
+                no_spa = True
+        if not no_spa:
+            env["AGENTFACTORY_SPA_DIR"] = str(spa_dir)
+
+    if not env.get("AGENTFACTORY_JWT_SECRET"):
+        click.echo(
+            "⚠️  AGENTFACTORY_JWT_SECRET is not set. Run once to generate one:\n"
+            "    export AGENTFACTORY_JWT_SECRET=\"$(python -c 'import secrets; print(secrets.token_urlsafe(32))')\"\n"
+            "    (Continuing with auth disabled in local mode until set.)"
+        )
+
+    click.echo(f"🚀 Starting AgentFactory Studio on http://localhost:{port}")
+    click.echo(f"   API docs: http://localhost:{port}/docs")
+    if not no_spa:
+        click.echo(f"   Dashboard: http://localhost:{port}  (built UI)")
+    click.echo("   Ctrl+C to stop.")
+
+    proc = subprocess.Popen(  # nosec B603 — argv is fixed; no shell interpretation
+        [sys.executable, "-m", "uvicorn", "agentfactory.app.main:app",
+         "--host", host, "--port", str(port)],
+        env=env,
+    )
+    try:
+        proc.wait()
+    except KeyboardInterrupt:
+        click.echo("\n🛑 Stopping AgentFactory Studio...")
+        proc.terminate()
+        proc.wait()
+
+
 @cli.command()
 @click.option("--port", default=8000, help="Port for the FastAPI server (default: 8000)")
 @click.option("--reload", is_flag=True, default=True, help="Enable auto-reload")
@@ -138,9 +203,10 @@ def init(force: bool):
 @click.option("--server-only", is_flag=True, help="Start only the FastAPI server")
 def run(port: int, reload: bool, worker_only: bool, server_only: bool):
     """
-    Start the FastAPI control plane and background polling worker.
+    Start the LEGACY v1 approval server and background polling worker.
 
-    Runs both simultaneously in separate processes by default.
+    Runs both simultaneously in separate processes by default. Prefer
+    `agentfactory studio` for the current platform.
     """
     if server_only and worker_only:
         click.echo("Error: Cannot specify both --server-only and --worker-only")

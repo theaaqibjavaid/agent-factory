@@ -24,6 +24,10 @@ OPENAI_API_KEY=your-openai-key-here
 
 ## 3. Start the System
 
+> **New to the Studio platform?** Run the full product (API + dashboard in one
+> process) with `agentfactory studio` and open http://localhost:8000. The
+> commands below are the **legacy v1 SDK flow** (approval server + worker).
+
 ```bash
 agentfactory run
 ```

@@ -75,26 +75,26 @@ research analyst, a customer assistant, anything.
 
 ### Option A — Self-host the Studio (full experience)
 
+**One command, one process, one port:**
+
 ```bash
-# Docker (recommended — one container serves API + UI + worker)
+pip install 'agentfactory-studio[platform]'   # or: pip install -e .
+agentfactory studio                            # builds the UI if needed
+```
+
+Open **http://localhost:8000** — that's the Studio: sign up, create an agent,
+add tools/skills/MCP servers and a model connection with your own API key, run
+a task, and watch it stream — with approvals, memory, terminal, and full
+observability. API docs: http://localhost:8000/docs.
+
+```bash
+# …or Docker (one container serves API + UI + worker)
 docker build -t agentfactory .
 docker run -d -p 8000:8000 \
   -e AGENTFACTORY_JWT_SECRET="$(openssl rand -hex 32)" \
   -v agentfactory-data:/data \
   agentfactory
 ```
-
-```bash
-# …or bare metal
-pip install 'agentfactory-studio[platform]'
-cd web && bun install && bun run build && cd ..
-AGENTFACTORY_SPA_DIR="$(pwd)/web/dist" AGENTFACTORY_JWT_SECRET="$(openssl rand -hex 32)" \
-  uvicorn agentfactory.app.main:app --host 0.0.0.0 --port 8000
-```
-
-Open **http://localhost:8000**, sign up, and you're in the Studio: create an
-agent, add tools/skills/MCP servers and a model connection with your own API
-key, run a task, and watch it stream — with budget alerts and full observability.
 
 > **PyPI note:** the distribution publishes as `agentfactory-studio` because the
 > bare `agentfactory` name is squatted on PyPI (placeholder `0.0.0` release by
@@ -110,7 +110,11 @@ agentfactory init
 agentfactory run
 ```
 
-See [docs/quick-start.md](docs/quick-start.md) and [docs/self-host.md](docs/self-host.md).
+> `agentfactory run` is the **legacy v1** approval server. For the current
+> platform use `agentfactory studio`.
+
+See [docs/quick-start.md](docs/quick-start.md), [docs/testing.md](docs/testing.md),
+and [docs/self-host.md](docs/self-host.md).
 
 ---
 

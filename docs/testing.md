@@ -56,22 +56,25 @@ python -c "import agentfactory; print(agentfactory.__version__)"   # 1.2.0
 
 ---
 
-## 3. Run the platform API
+## 3. Run everything — ONE command
 
-The platform API (auth, workspaces, agents, runs, memory, tools, MCP,
-marketplace, terminal, observability) is the backend the Studio talks to:
+The whole platform (API + Studio UI) runs in a single process with a single
+command. It builds the UI automatically if needed:
 
 ```bash
 export AGENTFACTORY_JWT_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-uvicorn agentfactory.app.main:app --host 0.0.0.0 --port 8000
+agentfactory studio
 ```
 
-- Interactive API docs: **http://localhost:8000/docs**
-- Health: `curl http://localhost:8000/health` → `{"status":"ok","version":"1.2.0"}`
+or, equivalently: `make studio`.
 
-> `agentfactory run` starts the **legacy v1** approval server
-> (`agentfactory.app.approval_server:app`) for backward compatibility. The
-> platform (v2) API above is what the Studio UI and this guide use.
+Open **http://localhost:8000** — that's the Studio dashboard. Also on the
+same origin: API docs at **http://localhost:8000/docs**, health at
+`curl http://localhost:8000/health`.
+
+> That's it. One process, one port, everything. `agentfactory studio`
+> runs the v2 platform API (`uvicorn agentfactory.app.main:app`) and serves
+> the built Studio UI from `web/dist` (building it with bun on first run).
 
 ### Optional: enable encryption-at-rest
 
@@ -80,29 +83,18 @@ export AGENTFACTORY_ENCRYPTION_KEY="$(python -c 'from cryptography.fernet import
 # back this key up — data written with it is unrecoverable without it
 ```
 
+### Alternatives (only if you want them)
+
+- **API only** (no UI): `agentfactory studio --no-spa`
+- **UI in dev mode** (hot reload; needs the API running separately on :8000):
+  ```bash
+  uvicorn agentfactory.app.main:app --host 0.0.0.0 --port 8000   # terminal 1
+  cd web && bun run dev                                          # terminal 2 → :5173
+  ```
+- **Legacy v1 server** (`agentfactory run`) exists only for old SDK users —
+  ignore it unless you use the pre-Phase-1 approval API.
+
 ---
-
-## 4. Run the Studio UI (the web dashboard)
-
-In a second terminal (while the API runs on :8000):
-
-```bash
-cd web
-bun run dev
-```
-
-Open **http://localhost:5173** — Vite proxies `/api` and `/health` to the API
-on :8000 automatically (see `web/vite.config.ts`).
-
-**Self-host / production-style:** build the SPA and let the API serve it
-(one process):
-
-```bash
-cd web && bun run build && cd ..
-export AGENTFACTORY_SPA_DIR="$(pwd)/web/dist"
-uvicorn agentfactory.app.main:app --host 0.0.0.0 --port 8000
-# open http://localhost:8000 — API + UI on the same origin
-```
 
 ---
 
