@@ -27,6 +27,9 @@ def client(tmp_path, monkeypatch):
     from agentfactory.app import db as platform_db
 
     platform_db._SCHEMA_READY.clear()  # fresh schema for this test
+    from agentfactory.app import ratelimit as ratelimit_module
+
+    ratelimit_module.reset()  # fresh auth rate-limit buckets per test
 
     from agentfactory.app.main import app
 

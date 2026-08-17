@@ -18,8 +18,16 @@ from pydantic import BaseModel, Field
 
 from agentfactory.app import db, security
 from agentfactory.app.deps import get_current_user, user_payload
+from agentfactory.app.ratelimit import rate_limit
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+# Phase 7.1 (S-8): per-IP sliding-window limit on the whole auth surface
+# (signup/login/refresh/oauth) to blunt credential stuffing. Configure via
+# AGENTFACTORY_RATE_LIMIT_AUTH (requests/minute/IP; 0 disables).
+router = APIRouter(
+    prefix="/auth",
+    tags=["auth"],
+    dependencies=[Depends(rate_limit("auth"))],
+)
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _PASSWORD_MIN = 8

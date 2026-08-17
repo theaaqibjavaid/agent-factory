@@ -104,6 +104,8 @@ keeps working in `LOCAL_MODE` (legacy bridge, Phase 1 task 1.5).
 | `AGENTFACTORY_ACCESS_TOKEN_MINUTES` | Platform access-token lifetime | `15` |
 | `AGENTFACTORY_REFRESH_TOKEN_DAYS` | Platform refresh-token lifetime (rotation + revocation) | `7` |
 | `AGENTFACTORY_APP_URL` | Public base URL used to build OAuth redirect URIs | `http://localhost:8000` |
+| `AGENTFACTORY_SPA_DIR` | Directory of the built Studio SPA; when set, the API also serves the UI (self-host single process, Phase 6.2) | *(empty — API-only)* |
+| `AGENTFACTORY_RATE_LIMIT_AUTH` | Auth surface rate limit in requests/minute/IP (signup/login/refresh/OAuth); `0` disables (Phase 7.1) | `20` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth app credentials (login via Google) | *(empty — disabled)* |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth app credentials (login via GitHub) | *(empty — disabled)* |
 

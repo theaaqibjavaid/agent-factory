@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AgentFactory Platform API",
     description="Multi-user control plane: auth, workspaces, agents (Phase 1)",
-    version="0.2.0",
+    version="1.1.0",
     lifespan=lifespan,
 )
 
@@ -77,7 +77,7 @@ app.include_router(observability.router, prefix="/api/v1")
 @app.get("/health", tags=["system"])
 def health():
     """Health check — returns no tokens, no sensitive data."""
-    return {"status": "ok", "service": "AgentFactory Platform API", "version": "0.2.0"}
+    return {"status": "ok", "service": "AgentFactory Platform API", "version": "1.1.0"}
 
 
 # ---------------------------------------------------------------------------

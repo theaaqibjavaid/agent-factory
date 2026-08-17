@@ -1,12 +1,11 @@
 # AgentFactory
 
-[![PyPI version](https://img.shields.io/badge/PyPI-1.0.0-blue?logo=pypi)](https://pypi.org/project/agentfactory/)
+[![PyPI version](https://img.shields.io/pypi/v/agentfactory?logo=pypi)](https://pypi.org/project/agentfactory/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://www.python.org/downloads/)
-[![Production Ready](https://img.shields.io/badge/Status-Production--Ready-green)](https://github.com/theaaqibjavaid/agent-factory)
-[![Documentation](https://img.shields.io/badge/Docs-Ready-orange)](https://github.com/theaaqibjavaid/agent-factory/tree/main/docs)
-[![Tests](https://img.shields.io/badge/Tests-201%20Passing-brightgreen)](https://github.com/theaaqibjavaid/agent-factory/actions)
+[![CI](https://github.com/theaaqibjavaid/agent-factory/actions/workflows/ci.yml/badge.svg)](https://github.com/theaaqibjavaid/agent-factory/actions)
 [![Coverage](https://img.shields.io/badge/Coverage-84%25-yellow)](https://github.com/theaaqibjavaid/agent-factory/actions)
+[![Docs](https://img.shields.io/badge/Docs-Summary-orange)](https://github.com/theaaqibjavaid/agent-factory/blob/main/docs/SUMMARY.md)
 
 AgentFactory is a universal, open-source Python SDK — and a full Studio platform — for building and operating production-grade AI agents of any type.
 

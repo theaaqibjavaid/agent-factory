@@ -34,3 +34,10 @@
 
 - [API Reference](api-reference.md) — Python API for `AgentFactory`, `FailoverLLMManager`, `ToolRegistry`, `Verifier`, `AgentConfig`.
 - [Environment Variables](env-vars.md) — Complete `.env` reference.
+
+## Community
+
+- [Security Policy](../SECURITY.md) — report vulnerabilities privately; supported versions.
+- [Code of Conduct](../CODE_OF_CONDUCT.md) — community standards.
+- [Changelog](../CHANGELOG.md) — release history (Keep a Changelog).
+- [Contributing](../CONTRIBUTING.md) — development setup, testing, contribution workflow.

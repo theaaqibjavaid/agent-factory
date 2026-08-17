@@ -112,6 +112,28 @@ Legend — effort: **S** ≤ 2 days, **M** ≤ 1 week, **L** ≤ 2 weeks, **XL**
 
 ---
 
+## Phase 7 — Open-Source Release Readiness
+
+- **7.1 Security backlog** — auth rate limiting (S-8): per-IP sliding-window
+  limiter on the auth surface (`429` + `Retry-After`), configurable via
+  `AGENTFACTORY_RATE_LIMIT_AUTH`; regression tests.
+- **7.2 Release automation** — PyPI publish workflow (trusted publishing on
+  `v*` tags) with wheel smoke + published-version verification; CI now runs on
+  every branch/tag plus manual dispatch; single source of truth for the
+  version across SDK, platform API, and SPA (1.1.0).
+- **7.3 Community** — `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`,
+  issue templates (bug/feature), PR template.
+- **7.4 Docs/env** — platform env vars documented in `env-vars.md` and
+  `.env.example`; Phases/SUMMARY updated.
+- **7.5 Cleanup** — untracked build artifacts removed; secret scan; README
+  badges.
+
+**Exit:** everything a first-time contributor and a self-hoster need to find
+is in the repo; `pip install agentfactory` from PyPI works; CI is green on
+`main`.
+
+---
+
 ## Dependency Graph
 
 ```
