@@ -22,9 +22,11 @@ from agentfactory.app.routers import (
     mcp,
     memories,
     models,
+    observability,
     proposals,
     runs,
     skills,
+    terminal,
     tools,
     users,
     workspaces,
@@ -67,6 +69,8 @@ app.include_router(skills.router, prefix="/api/v1")
 app.include_router(mcp.router, prefix="/api/v1")
 app.include_router(models.router, prefix="/api/v1")
 app.include_router(marketplace.router, prefix="/api/v1")
+app.include_router(terminal.router, prefix="/api/v1")
+app.include_router(observability.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["system"])

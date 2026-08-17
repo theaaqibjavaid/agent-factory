@@ -48,10 +48,31 @@ def run_event(event_name: str, **data: Any) -> Dict[str, Any]:
     return {"event": event_name, "data": data, "ts": _now_iso()}
 
 
+def _persist_run_event(run_id: str, workspace_id: Optional[str], event: Dict[str, Any]) -> None:
+    """Best-effort persistence of a run event into ``run_events`` (Phase 5.2)."""
+    try:
+        from agentfactory.app import db
+
+        conn = db.get_db()
+        try:
+            conn.execute(
+                "INSERT INTO run_events (run_id, workspace_id, seq, event, data, ts) VALUES (?, ?, ?, ?, ?, ?)",
+                (run_id, workspace_id or "", event["seq"], event["event"],
+                 json.dumps(event.get("data") or {}), event["ts"]),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001 — observability must never break a run
+        logger.debug("Could not persist run event", run_id=run_id, event=event.get("event"))
+
+
 class RunEventBroker:
     """Buffers the event stream for one run and fans it out to SSE clients."""
 
-    def __init__(self) -> None:
+    def __init__(self, run_id: Optional[str] = None, workspace_id: Optional[str] = None) -> None:
+        self.run_id = run_id
+        self.workspace_id = workspace_id
         self._events: List[Dict[str, Any]] = []
         self._seq = 0
         self._condition = asyncio.Condition()
@@ -62,12 +83,14 @@ class RunEventBroker:
         return list(self._events)
 
     async def publish(self, event: Dict[str, Any]) -> Dict[str, Any]:
-        """Append an event and notify waiting stream subscribers."""
+        """Append an event, notify waiting stream subscribers, persist it."""
         async with self._condition:
             self._seq += 1
             event["seq"] = self._seq
             self._events.append(event)
             self._condition.notify_all()
+        if self.run_id:
+            _persist_run_event(self.run_id, self.workspace_id, event)
         return event
 
     def finish(self) -> None:
@@ -97,18 +120,20 @@ class RunEventBroker:
 _RUN_BROKERS: Dict[str, RunEventBroker] = {}
 
 
-def get_broker(run_id: str) -> RunEventBroker:
+def get_broker(run_id: str, workspace_id: Optional[str] = None) -> RunEventBroker:
     """Get (creating if needed) the event broker for a run."""
     broker = _RUN_BROKERS.get(run_id)
     if broker is None:
-        broker = RunEventBroker()
+        broker = RunEventBroker(run_id=run_id, workspace_id=workspace_id)
         _RUN_BROKERS[run_id] = broker
+    elif workspace_id and not broker.workspace_id:
+        broker.workspace_id = workspace_id
     return broker
 
 
-def reset_broker(run_id: str) -> RunEventBroker:
+def reset_broker(run_id: str, workspace_id: Optional[str] = None) -> RunEventBroker:
     """Replace the run's broker with a fresh one (used on retry, Phase 2.6)."""
-    broker = RunEventBroker()
+    broker = RunEventBroker(run_id=run_id, workspace_id=workspace_id)
     _RUN_BROKERS[run_id] = broker
     return broker
 
@@ -293,6 +318,11 @@ def build_system_prompt(agent_row: dict, manifest: List[Dict[str, Any]]) -> str:
     skills = _skill_instructions(agent_row.get("workspace_id"), _json_list(agent_row.get("skills")))
     if skills:
         prompt += "\n\nYou have the following skills:\n\n" + skills
+    # Constitutional rules (Phase 5.3): hard constraints injected into the
+    # system prompt, rendered after tools/skills so they are the last word.
+    constitution = _json_list(agent_row.get("constitution"))
+    if constitution:
+        prompt += "\n\nConstitutional rules (must always follow):\n" + "\n".join(f"- {rule}" for rule in constitution)
     prompt += f"\n\nCurrent date: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
     prompt += "\n\nAlways think step by step. Use tools when needed."
     return prompt
@@ -508,11 +538,59 @@ class PlatformAgentRuntime:
                     "cost_per_call_usd": 0.0,
                 })
 
+    def _guardrail_block(self, name: str, arguments: Dict[str, Any]) -> Optional[str]:
+        """
+        Tool-level guardrails (Phase 5.3): branch protection + path allowlists.
+
+        Guardrails live in the agent's ``guardrails`` JSON column:
+        ``{"protected_branches": [...], "path_allowlist": [...]}``. Returns a
+        reason string when the call must be blocked, else ``None``.
+        """
+        try:
+            guardrails = json.loads(self.agent_row.get("guardrails") or "{}")
+        except (json.JSONDecodeError, TypeError):
+            guardrails = {}
+        if not isinstance(guardrails, dict):
+            guardrails = {}
+        protected = guardrails.get("protected_branches") or []
+        allowlist = guardrails.get("path_allowlist") or []
+
+        if protected and name in ("git_push_branch", "git_switch_branch", "git_create_branch", "git_create_pull_request"):
+            branch = arguments.get("branch_name") or arguments.get("head_branch")
+            if name == "git_push_branch" and not branch:
+                # Pushing the *current* branch cannot be verified statically —
+                # block it so protected branches can never be pushed silently.
+                return "Blocked by branch protection: push with an explicit branch_name is required"
+            if branch and branch in protected:
+                return f"Blocked by branch protection: '{branch}' is a protected branch"
+            if name == "git_create_pull_request":
+                base = arguments.get("base_branch") or "main"
+                if base in protected:
+                    return f"Blocked by branch protection: PR into protected branch '{base}'"
+
+        if allowlist and name in (
+            "read_text_file", "write_text_file", "delete_file", "list_directory_contents",
+            "search_files_by_pattern", "count_lines_in_file", "create_directory",
+        ):
+            path = (arguments.get("file_path") or arguments.get("directory_path")
+                    or arguments.get("dir_path") or arguments.get("path"))
+            if path:
+                allowed_roots = [os.path.realpath(str(p)) for p in allowlist]
+                real = os.path.realpath(str(path))
+                if not any(real == root or real.startswith(root + os.sep) for root in allowed_roots):
+                    return f"Blocked by path allowlist: '{path}' is outside the allowed paths"
+        return None
+
     async def _execute_tool(self, name: str, arguments: Dict[str, Any], broker: RunEventBroker) -> str:
-        """Execute one tool call, enforcing the DESTRUCTIVE safety gate."""
+        """Execute one tool call, enforcing the DESTRUCTIVE safety gate + guardrails."""
         wrapper = self.registry.get(name)
         if wrapper is None:
             return f"Error: Tool '{name}' is not available to this agent."
+        blocked = self._guardrail_block(name, arguments)
+        if blocked:
+            await broker.publish(run_event("error", message=blocked, tool=name, guardrail=True))
+            self.stats["errors"].append(blocked)
+            return blocked
         safety = wrapper.metadata.safety_level
         is_destructive = safety == SafetyLevel.DESTRUCTIVE or getattr(safety, "value", None) == "destructive"
         if is_destructive and not self.allow_destructive:
@@ -682,16 +760,17 @@ async def execute_run(run_id: str) -> None:
     """Execute a run end-to-end (worker entry point, Phase 2.6)."""
     from agentfactory.app import db
 
-    broker = get_broker(run_id)
     conn = db.get_db()
     try:
         row = conn.execute("SELECT * FROM agent_runs WHERE id = ?", (run_id,)).fetchone()
     finally:
         conn.close()
     if row is None:
-        broker.finish()
+        get_broker(run_id).finish()
         return
     run_row = dict(row)
+
+    broker = get_broker(run_id, workspace_id=run_row["workspace_id"])
 
     agent_row = _get_agent_row(run_row)
     if agent_row is None:
@@ -701,25 +780,74 @@ async def execute_run(run_id: str) -> None:
         return
 
     _update_run(run_id, status="running")
+    workspace_settings = _get_workspace_settings(run_row["workspace_id"])
     memory = PersistentMemory(agent_id=memory_scope_id(run_row["workspace_id"], agent_row["id"]))
-    runtime = PlatformAgentRuntime(agent_row, workspace_settings=_get_workspace_settings(run_row["workspace_id"]), memory=memory)
+    runtime = PlatformAgentRuntime(agent_row, workspace_settings=workspace_settings, memory=memory)
 
     try:
         result = await runtime.run(run_row["task"], run_id, broker)
         stats = result.get("stats") or {}
         failed_error = result.get("error")
+        status = "failed" if failed_error else "completed"
         if failed_error:
             _update_run(run_id, status="failed", result=result.get("result", ""), stats=json.dumps(stats), error=failed_error)
             await broker.publish(run_event("run.end", status="failed", run_id=run_id, error=failed_error))
         else:
             _update_run(run_id, status="completed", result=result.get("result", ""), stats=json.dumps(stats), error=None)
             await broker.publish(run_event("run.end", status="completed", run_id=run_id, result=result.get("result", ""), stats=stats))
+
+        # Budget alerts (Phase 5.2): warn at 80%, exceeded at 100% of the
+        # agent's daily budget, persisted to budget_alerts.
+        _check_and_record_budget_alerts(run_row, agent_row, run_id, stats)
+        # Notifications (Phase 5.4): run completion → Discord/Gmail/webhook.
+        _notify_run_complete(workspace_settings, run_row, agent_row, status, stats)
     except Exception as e:  # noqa: BLE001 — FAILED state recovery via retry
         logger.error("Run failed", run_id=run_id, error=str(e))
         _update_run(run_id, status="failed", error=str(e))
         await broker.publish(run_event("run.end", status="failed", run_id=run_id, error=str(e)))
     finally:
         broker.finish()
+
+
+def _check_and_record_budget_alerts(
+    run_row: dict, agent_row: dict, run_id: str, stats: Dict[str, Any]
+) -> None:
+    """Insert a budget alert when today's spend crosses 80%/100% of the daily budget."""
+    budget = float(agent_row.get("max_budget_usd_per_day") or 0.0)
+    if budget <= 0:
+        return
+    spend = float((stats or {}).get("total_cost_usd") or 0.0)
+    pct = spend / budget * 100.0
+    if pct < 80.0:
+        return
+    try:
+        from agentfactory.app.routers.observability import record_budget_alert
+
+        level = "exceeded" if pct >= 100.0 else "warn"
+        record_budget_alert(
+            run_row["workspace_id"], agent_row["id"], run_id, level,
+            f"Agent '{agent_row.get('name')}' used ${spend:.2f} ({pct:.0f}% of ${budget:.2f} daily budget)",
+        )
+    except Exception:  # noqa: BLE001 — alerts must never break a run
+        logger.warning("Could not record budget alert", run_id=run_id)
+
+
+def _notify_run_complete(
+    workspace_settings: dict, run_row: dict, agent_row: dict, status: str, stats: Dict[str, Any]
+) -> None:
+    """Fire run-completion notifications to configured channels (Phase 5.4)."""
+    try:
+        from agentfactory.app.notify import notify_run_complete
+
+        notify_run_complete(workspace_settings, {
+            "id": run_row["id"],
+            "status": status,
+            "task": run_row.get("task"),
+            "result": run_row.get("result"),
+            "stats": stats,
+        }, agent_row.get("name") or "agent")
+    except Exception:  # noqa: BLE001 — notifications must never break a run
+        logger.warning("Could not notify run completion", run_id=run_row.get("id"))
 
 
 def start_run_execution(run_id: str) -> None:

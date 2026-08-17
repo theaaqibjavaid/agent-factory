@@ -1,6 +1,6 @@
 // Settings — workspace configuration, safety policy, profile, and theme.
 import React, { useEffect, useState } from "react";
-import { Moon, Save, ShieldAlert, Sun, User } from "lucide-react";
+import { Bell, Moon, Save, ShieldAlert, Sun, User } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../components/auth";
 import { useWorkspace } from "../components/workspaces";
@@ -18,6 +18,7 @@ export function SettingsPage() {
   const [allowDestructive, setAllowDestructive] = useState<boolean>(
     Boolean(workspace?.settings && (workspace.settings as Record<string, unknown>).allow_destructive),
   );
+  const [notifications, setNotifications] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -25,6 +26,8 @@ export function SettingsPage() {
     if (workspace) {
       setName(workspace.name);
       setAllowDestructive(Boolean((workspace.settings as Record<string, unknown>)?.allow_destructive));
+      const notif = (workspace.settings as Record<string, unknown>)?.notifications;
+      setNotifications(typeof notif === "object" && notif !== null ? (notif as Record<string, unknown>) : {});
     }
   }, [workspace?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -47,7 +50,11 @@ export function SettingsPage() {
     try {
       await api.patch(`/api/v1/workspaces/${workspace.id}`, {
         name,
-        settings: { ...(workspace.settings as Record<string, unknown>), allow_destructive: allowDestructive },
+        settings: {
+          ...(workspace.settings as Record<string, unknown>),
+          allow_destructive: allowDestructive,
+          notifications,
+        },
       });
       await reload();
       setSaved(true);
@@ -107,6 +114,76 @@ export function SettingsPage() {
             {saved && <Badge tone="success">Saved</Badge>}
             <Button onClick={saveWorkspace} loading={saving}>
               <Save className="h-4 w-4" /> Save workspace
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Notifications (Phase 5.4) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-4 w-4" /> Notifications
+          </CardTitle>
+          <CardDescription>
+            Fire Discord / generic webhook / email alerts when runs complete or
+            gated proposals await review.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="flex items-center justify-between rounded-md border border-border p-3">
+              <div>
+                <p className="text-sm font-medium">Run completed</p>
+                <p className="text-xs text-muted-foreground">Notify when a run finishes.</p>
+              </div>
+              <Switch
+                checked={Boolean(notifications.on_run_complete)}
+                onCheckedChange={(v) => setNotifications((n) => ({ ...n, on_run_complete: v }))}
+                disabled={workspace?.role !== "owner" && workspace?.role !== "admin"}
+                label="Notify on run complete"
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-md border border-border p-3">
+              <div>
+                <p className="text-sm font-medium">Proposal pending</p>
+                <p className="text-xs text-muted-foreground">Notify when a gated run awaits approval.</p>
+              </div>
+              <Switch
+                checked={Boolean(notifications.on_proposal)}
+                onCheckedChange={(v) => setNotifications((n) => ({ ...n, on_proposal: v }))}
+                disabled={workspace?.role !== "owner" && workspace?.role !== "admin"}
+                label="Notify on proposal"
+              />
+            </div>
+          </div>
+          <Field label="Discord webhook URL" hint="Rich embed sent to this webhook.">
+            <Input
+              value={(notifications.discord_webhook_url as string) ?? ""}
+              onChange={(e) => setNotifications((n) => ({ ...n, discord_webhook_url: e.target.value }))}
+              placeholder="https://discord.com/api/webhooks/…"
+              disabled={workspace?.role !== "owner" && workspace?.role !== "admin"}
+            />
+          </Field>
+          <Field label="Generic webhook URL" hint="JSON payload with event name + run/proposal details.">
+            <Input
+              value={(notifications.webhook_url as string) ?? ""}
+              onChange={(e) => setNotifications((n) => ({ ...n, webhook_url: e.target.value }))}
+              placeholder="https://hooks.example.com/agentfactory"
+              disabled={workspace?.role !== "owner" && workspace?.role !== "admin"}
+            />
+          </Field>
+          <Field label="Email (Gmail SMTP)" hint="Needs GMAIL_USER + GMAIL_APP_PASSWORD env vars set on the server.">
+            <Input
+              value={(notifications.email as string) ?? ""}
+              onChange={(e) => setNotifications((n) => ({ ...n, email: e.target.value }))}
+              placeholder="ops@example.com"
+              disabled={workspace?.role !== "owner" && workspace?.role !== "admin"}
+            />
+          </Field>
+          <div className="flex items-center justify-end">
+            <Button variant="secondary" onClick={saveWorkspace} loading={saving}>
+              <Save className="h-4 w-4" /> Save notifications
             </Button>
           </div>
         </CardContent>

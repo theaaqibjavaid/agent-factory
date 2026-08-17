@@ -80,6 +80,8 @@ export function AgentDetailPage() {
         temperature: agent.temperature,
         max_budget_usd_per_day: agent.max_budget_usd_per_day,
         hitl_mode: agent.hitl_mode,
+        constitution: agent.constitution,
+        guardrails: agent.guardrails,
         max_iterations: agent.max_iterations,
       });
       setAgent(updated);
@@ -238,6 +240,22 @@ export function AgentDetailPage() {
                   placeholder="Extra instructions for the system prompt…"
                 />
               </Field>
+              <Field
+                label="Constitution"
+                hint="One rule per line — injected into the system prompt as hard constraints (Phase 5.3)."
+              >
+                <Textarea
+                  rows={5}
+                  value={(agent.constitution ?? []).join("\n")}
+                  onChange={(e) =>
+                    patch(
+                      "constitution",
+                      e.target.value.split("\n").map((s) => s.trim()).filter(Boolean),
+                    )
+                  }
+                  placeholder={"Never force-push to shared branches\nAlways cite sources"}
+                />
+              </Field>
             </CardContent>
           </Card>
 
@@ -320,6 +338,37 @@ export function AgentDetailPage() {
                     />
                   </Field>
                 </div>
+                <Field
+                  label="Protected branches"
+                  hint="git push/switch/PR into these branches is blocked for this agent."
+                >
+                  <Input
+                    value={(agent.guardrails?.protected_branches ?? []).join(", ")}
+                    onChange={(e) =>
+                      patch("guardrails", {
+                        ...agent.guardrails,
+                        protected_branches: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                      })
+                    }
+                    placeholder="main, master"
+                  />
+                </Field>
+                <Field
+                  label="Path allowlist"
+                  hint="File tools may only touch these paths (one per line). Empty = unrestricted."
+                >
+                  <Textarea
+                    rows={3}
+                    value={(agent.guardrails?.path_allowlist ?? []).join("\n")}
+                    onChange={(e) =>
+                      patch("guardrails", {
+                        ...agent.guardrails,
+                        path_allowlist: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean),
+                      })
+                    }
+                    placeholder="/tmp/workspace-data\n/var/lib/agent"
+                  />
+                </Field>
               </CardContent>
             </Card>
           </div>

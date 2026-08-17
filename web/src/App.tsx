@@ -17,6 +17,8 @@ import { SkillsPage } from "./pages/skills-page";
 import { McpPage } from "./pages/mcp-page";
 import { MarketplacePage } from "./pages/marketplace-page";
 import { ModelsPage } from "./pages/models-page";
+import { TerminalPage } from "./pages/terminal-page";
+import { ObservabilityPage } from "./pages/observability-page";
 import { SettingsPage } from "./pages/settings-page";
 
 /** Already signed in? Skip the auth screen. */
@@ -66,6 +68,8 @@ export default function App() {
             <Route path="mcp" element={<McpPage />} />
             <Route path="marketplace" element={<MarketplacePage />} />
             <Route path="models" element={<ModelsPage />} />
+            <Route path="terminal" element={<TerminalPage />} />
+            <Route path="observability" element={<ObservabilityPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
 

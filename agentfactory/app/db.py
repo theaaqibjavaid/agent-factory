@@ -75,6 +75,8 @@ CREATE TABLE IF NOT EXISTS agents (
     temperature            REAL NOT NULL DEFAULT 0.2,
     max_budget_usd_per_day REAL NOT NULL DEFAULT 5.0,
     hitl_mode              TEXT NOT NULL DEFAULT 'auto',  -- auto | gate
+    constitution           TEXT NOT NULL DEFAULT '[]',    -- constitutional rules (Phase 5.3)
+    guardrails             TEXT NOT NULL DEFAULT '{}',    -- tool-level guards: protected_branches / path_allowlist
     max_iterations         INTEGER NOT NULL DEFAULT 20,
     status                 TEXT NOT NULL DEFAULT 'idle',
     config_snapshot        TEXT,
@@ -171,6 +173,30 @@ CREATE TABLE IF NOT EXISTS model_connections (
     created_at   TEXT NOT NULL
 );
 
+-- Observability: persisted run events + budget alerts (Phase 5.2)
+CREATE TABLE IF NOT EXISTS run_events (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id       TEXT NOT NULL,
+    workspace_id TEXT NOT NULL,
+    seq          INTEGER NOT NULL,
+    event        TEXT NOT NULL,
+    data         TEXT NOT NULL DEFAULT '{}',
+    ts           TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_run_events_run ON run_events(run_id);
+CREATE INDEX IF NOT EXISTS idx_run_events_workspace ON run_events(workspace_id);
+
+CREATE TABLE IF NOT EXISTS budget_alerts (
+    id           TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    agent_id     TEXT,
+    run_id       TEXT,
+    level        TEXT NOT NULL,  -- warn | exceeded
+    message      TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_budget_alerts_workspace ON budget_alerts(workspace_id);
+
 -- Marketplace install audit trail (Phase 4.5)
 CREATE TABLE IF NOT EXISTS marketplace_installs (
     id           TEXT PRIMARY KEY,
@@ -212,6 +238,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
     tool_cols = {row[1] for row in conn.execute("PRAGMA table_info(tool_registrations)").fetchall()}
     if "env_allow" not in tool_cols:
         conn.execute("ALTER TABLE tool_registrations ADD COLUMN env_allow TEXT NOT NULL DEFAULT '[]'")
+    agent_cols = {row[1] for row in conn.execute("PRAGMA table_info(agents)").fetchall()}
+    if "constitution" not in agent_cols:
+        conn.execute("ALTER TABLE agents ADD COLUMN constitution TEXT NOT NULL DEFAULT '[]'")
+    if "guardrails" not in agent_cols:
+        conn.execute("ALTER TABLE agents ADD COLUMN guardrails TEXT NOT NULL DEFAULT '{}'")
 
 
 def init_db(db_path: Optional[str] = None) -> None:

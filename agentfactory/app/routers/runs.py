@@ -139,9 +139,36 @@ async def create_run(
             conn.commit()
         finally:
             conn.close()
+        # Notifications (Phase 5.4): a gated proposal awaits human review.
+        try:
+            from agentfactory.app.notify import notify_proposal_created
+
+            notify_proposal_created(_settings_for(workspace["id"]), {
+                "id": proposal_id,
+                "title": payload.task[:200],
+                "plan": payload.task,
+            }, agent["name"])
+        except Exception:  # noqa: BLE001 — notifications must never break run creation
+            pass
         response["proposal_id"] = proposal_id
 
     return response
+
+
+def _settings_for(workspace_id: str) -> dict:
+    """Decode a workspace's settings JSON (Phase 5.4 notification config lives there)."""
+    conn = db.get_db()
+    try:
+        row = conn.execute("SELECT settings FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return {}
+    try:
+        parsed = json.loads(row["settings"])
+        return parsed if isinstance(parsed, dict) else {}
+    except (json.JSONDecodeError, TypeError):
+        return {}
 
 
 @router.get("/workspaces/{workspace_id}/runs")
@@ -191,7 +218,7 @@ async def run_events(
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
-    broker = get_broker(run_id)
+    broker = get_broker(run_id, workspace_id=workspace["id"])
 
     async def event_generator():
         async for event in broker.stream(after_seq=after_seq):
@@ -221,6 +248,6 @@ async def retry_run_endpoint(run_id: str, workspace: dict = Depends(get_current_
         raise HTTPException(status_code=409, detail="Run could not be retried")
 
     # Fresh event stream for the retry execution, then restart on the loop.
-    reset_broker(run_id)
+    reset_broker(run_id, workspace_id=workspace["id"])
     asyncio.get_running_loop().create_task(execute_run(run_id))
     return {"run_id": run_id, "status": "running", "retries": run.get("retries", 0) + 1}

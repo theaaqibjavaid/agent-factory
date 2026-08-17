@@ -37,11 +37,17 @@ def _json_list(value: str) -> list:
 
 
 def _agent_payload(row) -> dict:
-    """Serialize an agent row, decoding JSON list columns."""
+    """Serialize an agent row, decoding JSON list/object columns."""
     data = dict(row)
-    for col in ("model_preferences", "tools", "skills", "mcp_servers"):
+    for col in ("model_preferences", "tools", "skills", "mcp_servers", "constitution"):
         if isinstance(data.get(col), str):
             data[col] = _json_list(data[col])
+    if isinstance(data.get("guardrails"), str):
+        try:
+            parsed = json.loads(data["guardrails"])
+            data["guardrails"] = parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            data["guardrails"] = {}
     return data
 
 
@@ -61,6 +67,8 @@ class AgentCreate(BaseModel):
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_budget_usd_per_day: float = Field(default=5.0, ge=0.0)
     hitl_mode: str = Field(default="auto", description="auto | gate")
+    constitution: List[str] = Field(default_factory=list, description="constitutional rules (Phase 5.3)")
+    guardrails: Optional[dict] = Field(default=None, description="{protected_branches, path_allowlist}")
     max_iterations: int = Field(default=20, ge=1, le=200)
 
     @field_validator("name", "rank")
@@ -91,6 +99,8 @@ class AgentUpdate(BaseModel):
     temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
     max_budget_usd_per_day: Optional[float] = Field(default=None, ge=0.0)
     hitl_mode: Optional[str] = None
+    constitution: Optional[List[str]] = None
+    guardrails: Optional[dict] = None
     max_iterations: Optional[int] = Field(default=None, ge=1, le=200)
     status: Optional[str] = None
 
@@ -139,8 +149,9 @@ def create_agent(payload: AgentCreate, workspace: dict = Depends(get_current_wor
             INSERT INTO agents (id, workspace_id, name, rank, role_description,
                                 system_instructions, model_preferences, tools, skills,
                                 mcp_servers, temperature, max_budget_usd_per_day,
-                                hitl_mode, max_iterations, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                hitl_mode, constitution, guardrails, max_iterations,
+                                status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 agent_id,
@@ -156,6 +167,8 @@ def create_agent(payload: AgentCreate, workspace: dict = Depends(get_current_wor
                 payload.temperature,
                 payload.max_budget_usd_per_day,
                 payload.hitl_mode,
+                json.dumps(payload.constitution),
+                json.dumps(payload.guardrails or {}),
                 payload.max_iterations,
                 "idle",
                 now,
@@ -215,7 +228,9 @@ def update_agent(
     for field_name, value in payload.model_dump(exclude_unset=True).items():
         if value is None:
             continue
-        if field_name in ("model_preferences", "tools", "skills", "mcp_servers"):
+        if field_name in ("model_preferences", "tools", "skills", "mcp_servers", "constitution"):
+            value = json.dumps(value)
+        if field_name == "guardrails" and isinstance(value, dict):
             value = json.dumps(value)
         updates.append(f"{field_name} = ?")
         params.append(value)

@@ -12,11 +12,13 @@ import {
   Database,
   Gauge,
   Hammer,
+  LineChart,
   LogOut,
   Menu,
   Settings,
   ShieldAlert,
   Store,
+  TerminalSquare,
   Wand2,
   X,
 } from "lucide-react";
@@ -31,6 +33,8 @@ const NAV = [
   { to: "/app/runs", label: "Run Console", icon: Activity },
   { to: "/app/approvals", label: "Approvals", icon: CheckCheck },
   { to: "/app/memory", label: "Memory", icon: Database },
+  { to: "/app/terminal", label: "Terminal", icon: TerminalSquare },
+  { to: "/app/observability", label: "Observability", icon: LineChart },
 ];
 
 const EXTENSIBILITY_NAV = [
