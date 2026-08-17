@@ -73,7 +73,7 @@ research analyst, a customer assistant, anything.
 
 ## 🚀 Quick Start
 
-### Option A — Self-host the Studio (full experience)
+### Option A — Self-host the Studio (full experience) ✅ *this is the product*
 
 **One command, one process, one port:**
 
@@ -86,6 +86,9 @@ Open **http://localhost:8000** — that's the Studio: sign up, create an agent,
 add tools/skills/MCP servers and a model connection with your own API key, run
 a task, and watch it stream — with approvals, memory, terminal, and full
 observability. API docs: http://localhost:8000/docs.
+
+> **Step-by-step walkthrough of every feature (API + UI + tests):**
+> [docs/testing.md](docs/testing.md) — "Local Testing Guide"
 
 ```bash
 # …or Docker (one container serves API + UI + worker)
@@ -102,7 +105,7 @@ docker run -d -p 8000:8000 \
 > first PyPI release, install from source:
 > `pip install git+https://github.com/theaaqibjavaid/agent-factory.git`.
 
-### Option B — SDK only
+### Option B — SDK only (no Studio UI)
 
 ```bash
 pip install agentfactory-studio[all]   # all LLM providers
@@ -110,8 +113,9 @@ agentfactory init
 agentfactory run
 ```
 
-> `agentfactory run` is the **legacy v1** approval server. For the current
-> platform use `agentfactory studio`.
+> ⚠️ **Legacy v1 flow.** `init` / `run` / `create-agent` / `list-tools` are the
+> old SDK/approval-server commands, kept for backwards compatibility. For the
+> current platform use **`agentfactory studio`** (Option A).
 
 See [docs/quick-start.md](docs/quick-start.md), [docs/testing.md](docs/testing.md),
 and [docs/self-host.md](docs/self-host.md).
@@ -140,14 +144,20 @@ see the [API reference](docs/api-reference.md) and [tool system](docs/tools.md).
 
 ## 🖥️ CLI Reference
 
+> **The command you want is `agentfactory studio`** — it runs the whole product
+> (API + Studio UI) on one port. The other commands below are legacy v1 SDK
+> tooling; they still exist for backwards compatibility but you don't need them
+> for the platform.
+
 | Command | Description |
 |---|---|
-| `agentfactory init` | Scaffold a project + `.env` |
-| `agentfactory run` | Run the default agent |
-| `agentfactory create-agent` | Add an agent profile |
-| `agentfactory list-tools` | List registered tools |
-| `agentfactory status` | Check the approval server |
-| `agentfactory token` | Mint a local JWT (v1 approval server) |
+| `agentfactory studio` | **Run the full platform** (API + UI) on http://localhost:8000 — the one command you need |
+| `agentfactory init` | *(legacy v1)* Scaffold a project + `.env` |
+| `agentfactory run` | *(legacy v1)* Approval server + background worker |
+| `agentfactory create-agent` | *(legacy v1)* Add an agent profile |
+| `agentfactory list-tools` | *(legacy v1)* List registered tools |
+| `agentfactory status` | *(legacy v1)* Check the approval server |
+| `agentfactory token` | *(legacy v1)* Mint a local JWT |
 
 Full reference: [docs/cli-reference.md](docs/cli-reference.md).
 

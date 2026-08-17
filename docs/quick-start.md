@@ -1,110 +1,96 @@
 # Quick Start
 
-Run your first AI agent team in 5 minutes.
+Run the AgentFactory Studio — the full platform (API + dashboard) — in one command.
 
-## 1. Initialize
+> **The one command you need: `agentfactory studio`.** It starts the v2 platform
+> API **and** serves the Studio UI on a single port. Everything else in this
+> doc is optional or legacy.
+
+## 1. Install
 
 ```bash
-agentfactory init --force
+# From PyPI (current release)
+pip install "agentfactory-studio[platform]"
+
+# Or from source (repo checkout)
+pip install -e ".[platform]"
+cd web && bun install && cd ..
 ```
 
-This creates:
-- `.env` — API keys and configuration
-- `mcp.json` — MCP server config
-- `agents/examples/` — Example agent YAML configs
-
-## 2. Configure
-
-Edit `.env` and add your API keys. At minimum, set `GEMINI_API_KEY`:
+Verify:
 
 ```bash
-GEMINI_API_KEY=your-gemini-key-here
+agentfactory --version        # e.g. 1.2.0
+```
+
+## 2. Run the whole product — ONE command
+
+```bash
+# Pick a JWT secret (required to start the platform)
+export AGENTFACTORY_JWT_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+
+# Start API + Studio UI on http://localhost:8000 (builds the UI on first run)
+agentfactory studio
+# or: make studio
+```
+
+Open **http://localhost:8000** — that's the Studio dashboard:
+
+1. **Sign up** (first account owns the default workspace).
+2. **Agents → create** an agent (rank, role, tools, budget, HITL mode).
+3. **Models → connect** a provider with your own API key (`GEMINI_API_KEY` or
+   `OPENAI_API_KEY` — or a custom provider URL + key).
+4. **Run** a task and watch the live event stream (tokens, tool calls, cost).
+5. Add **tools / skills / MCP servers / marketplace items**, use the built-in
+   **terminal**, review **approvals**, and manage **memory** (export/import).
+
+Also on the same port: API docs at **http://localhost:8000/docs** and health at
+`curl http://localhost:8000/health`.
+
+> Full step-by-step testing guide (every feature, plus the automated suites):
+> **[docs/testing.md](testing.md)**.
+
+## 3. Configure LLM API keys (for real agent runs)
+
+At least one provider key, in the environment or in `.env`:
+
+```bash
+GEMINI_API_KEY=your-gemini-key-here     # free tier — recommended default
 OPENAI_API_KEY=your-openai-key-here
+ANTHROPIC_API_KEY=your-anthropic-key-here
 ```
 
-## 3. Start the System
+LLM failover order is Gemini → OpenAI → Anthropic; set as many as you like.
+See [docs/env-vars.md](env-vars.md) for the complete reference.
 
-> **New to the Studio platform?** Run the full product (API + dashboard in one
-> process) with `agentfactory studio` and open http://localhost:8000. The
-> commands below are the **legacy v1 SDK flow** (approval server + worker).
+## 4. Optional: enable encryption-at-rest (Phase 8)
 
 ```bash
-agentfactory run
+export AGENTFACTORY_ENCRYPTION_KEY="$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+# back this key up — data written with it is unrecoverable without it
 ```
 
-This starts:
-- **FastAPI approval server** at `http://localhost:8000` (API docs at `/docs`)
-- **Background worker** that polls for approved agent tasks
+## 5. SDK / CLI usage (not the Studio)
 
-Or run separately:
-
-```bash
-# Server only
-uvicorn agentfactory.app.approval_server:app --port 8000 --reload
-
-# Worker only (from your separate repo)
-python -m agentfactory.agents.worker --watch
-```
-
-## 4. Use the CLI
-
-```bash
-# List all tools (28 built-in tools)
-agentfactory list-tools
-
-# Create a new agent config
-agentfactory create-agent my_researcher --rank Senior
-
-# Check server status
-agentfactory status
-```
-
-## 5. Write Your First Agent (from YAML)
-
-Create `agents/my_agent.yaml`:
-
-```yaml
-agent_name: "MyBot"
-rank: "Senior"
-model_preference: ["gemini-2.5-flash", "gpt-4o"]
-responsibilities: "Research and summarize technical topics"
-tools: ["web_search", "web_fetch", "list_directory_contents"]
-system_instructions: "You are a helpful research assistant."
-constitutional_boundaries:
-  max_budget_usd_per_day: 2.00
-allow_delegation: true
-```
-
-## 6. Using as a Dependency (Phase 5)
-
-This template is designed to be used as a Python package dependency in your own agent projects:
-
-```bash
-pip install agentfactory-studio
-```
+Use the SDK as a Python library in your own projects:
 
 ```python
 from agentfactory.core import AgentFactory
-from agentfactory.config import LLMConfig
-from agentfactory.base_tools import tool, ToolRegistry
 
-# Import built-in tools
-import agentfactory.tools
-
-# Your custom tools
-@tool("my_custom_tool", category="custom")
-def my_custom_tool(data: str) -> str:
-    """Process data."""
-    return f"Processed: {data}"
-
-# Create your agent
 factory = AgentFactory()
-agent = factory.create_agent("MyAgent", rank="Senior")
+agent = factory.create_agent("Senior")
+result = await agent.run("Implement user authentication")
 ```
+
+> ⚠️ The standalone CLI commands (`agentfactory init`, `run`, `create-agent`,
+> `list-tools`, `status`, `token`) are the **legacy v1** SDK/approval-server
+> flow, kept for backwards compatibility. New projects should use
+> `agentfactory studio`.
 
 ## Next Steps
 
-- Read [Architecture](architecture.md) to understand the design
-- Review [CLI Reference](cli-reference.md) for all commands
-- See [Agent Configuration](agent-config.md) for YAML schema details
-- Learn about [writing custom tools](tools.md)
+- [Local Testing Guide](testing.md) — test every feature end to end
+- [Architecture](architecture.md) — understand the design
+- [CLI Reference](cli-reference.md) — every command
+- [Agent Configuration](agent-config.md) — YAML schema details
+- [Writing custom tools](tools.md) — `@tool` decorator and sandboxed code
