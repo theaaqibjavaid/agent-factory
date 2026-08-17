@@ -12,6 +12,9 @@ eggs/
 .eggs/
 lib/
 lib64/
+# ...but the Studio's shared module lives in web/src/lib and MUST be tracked.
+!web/src/lib/
+!web/src/lib/**
 parts/
 sdist/
 var/
