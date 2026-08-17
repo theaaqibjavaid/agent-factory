@@ -13,6 +13,7 @@
 - [Installation](installation.md) — Set up your environment and API keys.
 - [Quick Start](quick-start.md) — Run your first agent in 5 minutes.
 - [Self-Host Studio](self-host.md) — Run the full platform (API + dashboard + terminal) in Docker or bare metal.
+- [Local Testing Guide](testing.md) — Run the API + Studio UI and test every feature end to end.
 - [Migrate v1 → v2](migration-v1-v2.md) — Move from the SDK/approval server to the Studio platform.
 - [CLI Reference](cli-reference.md) — All CLI commands: `init`, `run`, `create-agent`, `list-tools`, `status`.
 
