@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * AgentFactory Studio design tokens (design.md §4.1).
+ * Factory metaphor: warm amber/copper accent on a cool industrial zinc base.
+ * All component colors reference these tokens — no hardcoded colors.
+ */
+:root {
+  --background: 220 16% 8%;
+  --foreground: 40 20% 94%;
+  --card: 220 14% 11%;
+  --card-foreground: 40 20% 94%;
+  --primary: 32 94% 52%;
+  --primary-foreground: 220 20% 8%;
+  --secondary: 220 12% 16%;
+  --secondary-foreground: 40 15% 90%;
+  --muted: 220 10% 15%;
+  --muted-foreground: 220 8% 62%;
+  --accent: 25 70% 38%;
+  --accent-foreground: 40 20% 96%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 220 10% 20%;
+  --input: 220 10% 22%;
+  --ring: 32 94% 52%;
+  --success: 142 61% 45%;
+  --warning: 38 92% 50%;
+  --radius: 0.6rem;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+html.light {
+  --background: 40 25% 97%;
+  --foreground: 220 16% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 16% 14%;
+  --primary: 25 90% 45%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 40 15% 90%;
+  --secondary-foreground: 220 16% 20%;
+  --muted: 40 12% 92%;
+  --muted-foreground: 220 8% 42%;
+  --accent: 30 60% 88%;
+  --accent-foreground: 220 16% 16%;
+  --destructive: 0 72% 45%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 40 12% 85%;
+  --input: 40 12% 82%;
+  --ring: 25 90% 45%;
+  --success: 142 61% 38%;
+  --warning: 38 92% 42%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Numeric data reads cleanly in tables/stats */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scroll areas */
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 9999px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
