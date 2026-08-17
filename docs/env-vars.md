@@ -110,3 +110,20 @@ keeps working in `LOCAL_MODE` (legacy bridge, Phase 1 task 1.5).
 Passwords are hashed with argon2id; refresh tokens are opaque, stored in
 SQLite, and rotated on every use (replays rejected). Start the platform API
 with `uvicorn agentfactory.app.main:app --port 8000`.
+
+### Runs, approvals & memory (Phase 2)
+
+- `POST /api/v1/workspaces/{ws}/agents/{agent_id}/runs` — create a run.
+  Agents with `hitl_mode=auto` start immediately; `hitl_mode=gate` creates a
+  proposal and waits for `POST .../proposals/{id}/review` (approve/reject/modify).
+- `GET .../runs/{run_id}/events` — SSE stream (`run.start | token | tool_call |
+  tool_result | verify | memory | cost | run.end | error`, design.md §6).
+- `POST .../runs/{run_id}/retry` — recover FAILED runs.
+- `.../agents/{agent_id}/memory/*` — facts, history, clear (confirm `DELETE`),
+  and versioned export/import bundles. Memory is scoped per workspace+agent
+  inside `MEMORY_DB_PATH`.
+
+**Destructive tools:** the runtime blocks `DESTRUCTIVE`-safety tools unless the
+workspace settings JSON contains `"allow_destructive": true` (set via
+`PATCH /api/v1/workspaces/{ws}`). Gated agents (`hitl_mode=gate`) are the
+supported way to run destructive tasks with human approval.

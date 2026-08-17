@@ -14,7 +14,7 @@ from typing import Dict, Optional
 
 DEFAULT_DB_PATH = os.path.join(os.path.expanduser("~"), ".agentfactory", "platform.db")
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS users (
@@ -84,23 +84,27 @@ CREATE TABLE IF NOT EXISTS agents (
 CREATE INDEX IF NOT EXISTS idx_agents_workspace ON agents(workspace_id);
 
 CREATE TABLE IF NOT EXISTS agent_runs (
-    id           TEXT PRIMARY KEY,
-    agent_id     TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-    workspace_id TEXT NOT NULL,
-    task         TEXT NOT NULL,
-    status       TEXT NOT NULL DEFAULT 'pending',  -- pending|running|completed|failed|cancelled
-    result       TEXT,
-    stats        TEXT,
-    error        TEXT,
-    created_at   TEXT NOT NULL,
-    updated_at   TEXT NOT NULL
+    id              TEXT PRIMARY KEY,
+    agent_id        TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    workspace_id    TEXT NOT NULL,
+    task            TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',  -- pending|pending_approval|running|completed|failed|cancelled
+    result          TEXT,
+    stats           TEXT,
+    error           TEXT,
+    config_snapshot TEXT,                             -- agent config at run start (Phase 2.1)
+    retries         INTEGER NOT NULL DEFAULT 0,       -- failed-run retry count (Phase 2.6)
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_runs_agent ON agent_runs(agent_id);
+CREATE INDEX IF NOT EXISTS idx_runs_workspace ON agent_runs(workspace_id);
 
 CREATE TABLE IF NOT EXISTS proposals (
     id             TEXT PRIMARY KEY,
     workspace_id   TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     agent_id       TEXT REFERENCES agents(id) ON DELETE SET NULL,
+    run_id         TEXT REFERENCES agent_runs(id) ON DELETE SET NULL,
     title          TEXT NOT NULL,
     plan           TEXT,
     status         TEXT NOT NULL DEFAULT 'pending',  -- pending|approved|rejected|modified|executed
@@ -177,6 +181,19 @@ def _db_path() -> str:
     return os.getenv("AGENTFACTORY_DB_PATH", DEFAULT_DB_PATH)
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Apply idempotent column migrations for databases created before v2."""
+    # PRAGMA table_info returns rows as tuples: (cid, name, type, notnull, dflt_value, pk)
+    runs_cols = {row[1] for row in conn.execute("PRAGMA table_info(agent_runs)").fetchall()}
+    if "config_snapshot" not in runs_cols:
+        conn.execute("ALTER TABLE agent_runs ADD COLUMN config_snapshot TEXT")
+    if "retries" not in runs_cols:
+        conn.execute("ALTER TABLE agent_runs ADD COLUMN retries INTEGER NOT NULL DEFAULT 0")
+    proposals_cols = {row[1] for row in conn.execute("PRAGMA table_info(proposals)").fetchall()}
+    if "run_id" not in proposals_cols:
+        conn.execute("ALTER TABLE proposals ADD COLUMN run_id TEXT REFERENCES agent_runs(id) ON DELETE SET NULL")
+
+
 def init_db(db_path: Optional[str] = None) -> None:
     """Create schema v2 tables if they don't exist (idempotent)."""
     path = db_path or _db_path()
@@ -187,6 +204,7 @@ def init_db(db_path: Optional[str] = None) -> None:
         conn = sqlite3.connect(path)
         try:
             conn.executescript(_SCHEMA_SQL)
+            _migrate(conn)
             conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
             conn.commit()
             _SCHEMA_READY[path] = True

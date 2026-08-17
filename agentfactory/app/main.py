@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from agentfactory.app import db
-from agentfactory.app.routers import agents, auth, users, workspaces
+from agentfactory.app.routers import agents, auth, memories, proposals, runs, users, workspaces
 
 
 @asynccontextmanager
@@ -46,6 +46,9 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(workspaces.router, prefix="/api/v1")
 app.include_router(agents.router, prefix="/api/v1")
+app.include_router(runs.router, prefix="/api/v1")
+app.include_router(proposals.router, prefix="/api/v1")
+app.include_router(memories.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["system"])

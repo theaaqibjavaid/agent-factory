@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from agentfactory.app import db
 from agentfactory.app.deps import get_current_user, get_current_workspace
+from agentfactory.runtime import render_agent_config
 
 router = APIRouter(tags=["agents"], dependencies=[Depends(get_current_user)])
 
@@ -182,6 +183,22 @@ def get_agent(agent_id: str, workspace: dict = Depends(get_current_workspace)):
     if row is None:
         raise HTTPException(status_code=404, detail="Agent not found")
     return _agent_payload(row)
+
+
+@router.get("/workspaces/{workspace_id}/agents/{agent_id}/render")
+def render_agent(agent_id: str, workspace: dict = Depends(get_current_workspace)):
+    """Render an agent's runnable config: system prompt + tool manifest (Phase 2.1)."""
+    conn = db.get_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM agents WHERE id = ? AND workspace_id = ?",
+            (agent_id, workspace["id"]),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return render_agent_config(dict(row))
 
 
 @router.patch("/workspaces/{workspace_id}/agents/{agent_id}")
