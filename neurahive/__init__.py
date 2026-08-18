@@ -15,6 +15,14 @@ from neurahive.core import (
 )
 from neurahive.tools import Tool, ToolRegistry, ToolResult
 from neurahive.providers import MemoryProvider, Model, ModelProvider
+from neurahive.contracts import (
+    MCPProvider,
+    ModelRequest,
+    ModelResponse,
+    ToolExecutor,
+    VerificationResult,
+    Verifier,
+)
 
 __all__ = [
     "Agent",
@@ -29,6 +37,12 @@ __all__ = [
     "MemoryProvider",
     "Model",
     "ModelProvider",
+    "MCPProvider",
+    "ModelRequest",
+    "ModelResponse",
+    "ToolExecutor",
+    "VerificationResult",
+    "Verifier",
 ]
 
 __version__ = "2.0.0.dev0"
