@@ -15,6 +15,7 @@ Make NeuraHive a genuine reusable SDK rather than a platform with an embedded SD
 - Added dependency-injected `Agent`, `AgentConfig`, `AgentContext`, `AgentResult`, and `AgentRuntime` contracts.
 - Added provider-neutral `Model`, `ModelProvider`, and `MemoryProvider` protocols.
 - Added instance-scoped `Tool` and `ToolRegistry` contracts.
+- Added provider-neutral model request/response, verification, tool-executor, and MCP contracts.
 - Added public API exports from `neurahive`.
 - Included `neurahive*` in the package build without removing legacy `agentfactory*`.
 - Added core contract tests and a mechanical core/platform import boundary test.
@@ -24,7 +25,7 @@ Make NeuraHive a genuine reusable SDK rather than a platform with an embedded SD
 - Migration of the legacy `RunnableAgent` execution loop.
 - Provider adapters for Gemini/OpenAI/Anthropic.
 - SQLite/PostgreSQL/Redis memory implementations behind `MemoryProvider`.
-- MCP integration adapters.
+- MCP transport adapters.
 - Platform dependency resolution.
 - Workflow engine.
 - Destructive rename of the PyPI distribution.
