@@ -1,69 +1,110 @@
 # Phase 1.1 — Legacy Compatibility + External Consumer Contract
 
-**Status:** In progress
+**Status:** Complete
 **Branch:** `feature/phase-1-sdk-core-separation`
 **Base:** `feature/phase-0-architecture-contract`
 **Main/dev:** untouched
 
-## Why this sub-phase exists
+## Objective
 
-During Phase 1 implementation, the architecture was refined: the legacy `RunnableAgent` should **not** be copied into the NeuraHive core. It combines model failover, memory, MCP, verification, tool execution, history, and retry policy in one platform-era object.
+Prove that NeuraHive can serve as an independent SDK while preserving a deliberate migration boundary for the legacy AgentFactory surface.
 
-Instead, NeuraHive will expose small provider-neutral contracts and an explicit compatibility adapter. This preserves existing AgentFactory consumers while moving the canonical execution model toward injected dependencies.
+## Architectural decision refined during implementation
 
-## Current work
+The legacy `RunnableAgent` is not copied into NeuraHive. It combines model failover, memory, MCP, verification, tool execution, history, and retry policy in one platform-era object.
 
-1. Define the legacy → v2 compatibility mapping.
-2. Add an external-consumer example that uses only public `neurahive` APIs.
-3. Add compatibility tests that prove the legacy namespace remains available while the v2 namespace is independent.
-4. Keep the adapter in the legacy compatibility boundary; do not import legacy platform modules from NeuraHive core.
-5. Keep CI aware of the new `neurahive` package so the core cannot silently disappear from test/build validation.
-6. Update the master roadmap and architecture documentation whenever an implementation decision changes the target architecture.
+Instead, compatibility is an explicit **translation boundary**:
 
-## Implemented
+```text
+Legacy configuration/profile
+        ↓
+LegacyAgentAdapter
+        ↓
+NeuraHive AgentConfig
+        ↓
+NeuraHive Agent
+        ↓
+Injected providers + runtime
+```
 
-- `agentfactory.compat.LegacyAgentAdapter` provides a thin legacy boundary without moving the monolithic `RunnableAgent` implementation into NeuraHive.
-- Compatibility forwarding tests cover `run`, `think`, `execute_tool`, required runtime validation, and attribute access.
-- `examples/external_consumer/` demonstrates a consumer-owned `ModelProvider` using only public `neurahive` APIs.
-- CI now installs the repository in editable mode before testing, explicitly tests NeuraHive core/compatibility tests, scans the NeuraHive package, and smoke-tests the public NeuraHive import from the built wheel.
+The adapter does not make NeuraHive import legacy runtime modules. Compatibility may depend on NeuraHive; NeuraHive core must never depend on compatibility.
 
-## CI finding and correction
+## Completed
 
-The first CI run after introducing the NeuraHive tests failed during test collection because the workflow installed dependencies but did not install the repository itself. The existing build job already proved the package could be installed from a wheel, but the test job did not expose the source package on `sys.path`.
+- Added `neurahive` v2 public namespace and provider-neutral core contracts.
+- Added platform-independent `InProcessRuntime` / `BasicAgentExecutor`.
+- Added explicit `agentfactory.compat` namespace.
+- Added `LegacyAgentAdapter.from_persona()` to structurally translate legacy persona/configuration shapes into `neurahive.Agent`.
+- Preserved legacy-style `run`, `think`, and `execute_tool` entry points at the compatibility boundary.
+- Added tests for translation, runtime execution, tool filtering/isolation, and legacy surface forwarding.
+- Added an external-consumer example using only public NeuraHive APIs and a consumer-owned model provider.
+- Added mechanical architecture-boundary tests preventing NeuraHive core imports from depending on legacy/platform modules.
+- Updated CI to install the repository before testing, validate NeuraHive tests, scan the package, and smoke-test the built wheel in a clean environment.
 
-This was a **CI integration gap**, not a NeuraHive runtime failure. The workflow has been corrected with `pip install -e .` and an explicit NeuraHive core test step.
+## CI finding resolved
 
-The failing run also showed the security, web, and wheel-build jobs succeeding; the test failure was three `ModuleNotFoundError: neurahive` collection errors.
+The initial NeuraHive CI test collection failed because the test job installed dependencies but did not install the repository. The build job already demonstrated successful wheel installation. CI was corrected with editable installation and explicit NeuraHive test paths.
+
+The subsequent test-path correction also records the actual repository test layout rather than assuming a nonexistent compatibility test path.
 
 ## Compatibility mapping
 
-| Legacy concern | NeuraHive v2 target |
-|---|---|
-| `AgentFactory.create_agent()` | Consumer-owned `Agent` construction/factory |
-| `RunnableAgent.run()` | `Agent.run()` / `AgentRuntime.run()` |
-| LLM manager/failover | `ModelProvider` + future provider/retry adapters |
-| `PersistentMemory` | `MemoryProvider` implementation |
-| `SkillRegistry` | project-owned tool/skill registration |
-| MCP client | `MCPProvider` adapter |
-| verification | `Verifier` contract |
-| tool execution | `ToolExecutor` |
-| history/statistics | future execution state/event contracts |
+| Legacy concern | Phase 1.1 result | Long-term v2 target |
+|---|---|---|
+| `AgentFactory.create_agent()` | compatibility remains legacy-side | consumer-owned factory/configuration |
+| `RunnableAgent.run()` | adapter surface | `AgentRuntime.run()` |
+| `AgentPersona` / config | structural translation | `AgentConfig` |
+| LLM manager/failover | not moved into core | `ModelProvider` + retry/failover adapters |
+| `PersistentMemory` | not moved into core | `MemoryProvider` implementations |
+| `SkillRegistry` | not imported by core | `ToolRegistry` / future skill provider |
+| MCP client | not moved into core | `MCPProvider` adapter |
+| verification | contract defined | verifier implementation/policy phase |
+| tool execution | compatibility can execute registered v2 tools | dedicated tool execution engine |
+| history/statistics | legacy result compatibility only | execution state/events |
 
-## Architecture rule
+## Acceptance results
 
-NeuraHive core must never import `agentfactory.app`, platform database modules, Studio modules, or project-specific registries merely to make a legacy API work.
+### A. Public SDK independence
 
-Compatibility may depend on NeuraHive, but NeuraHive must not depend on compatibility.
+**PASS.** An external-style consumer constructs an `Agent` with an injected model provider and executes it through `InProcessRuntime` without AgentFactory, FastAPI, SQLAlchemy, Studio, or platform state.
 
-## External consumer acceptance test
+### B. Compatibility boundary
 
-An unrelated project must be able to:
+**PASS.** Legacy-shaped configuration can be translated into a NeuraHive agent without importing legacy Pydantic models into NeuraHive core.
 
-- import `neurahive`;
-- construct an `Agent` with injected dependencies;
-- execute it through `InProcessRuntime`;
-- avoid importing `agentfactory`, FastAPI, SQLAlchemy, Studio, or platform modules.
+### C. Tool isolation
 
-## Exit criteria
+**PASS.** Tool registries are instance-scoped; compatibility tool filtering creates a separate registry rather than mutating the consumer's registry.
 
-Phase 1.1 is complete when the compatibility mapping is documented and tested, an external consumer example is executable, the CI/build pipeline validates the new namespace, and the compatibility surface has no reverse dependency into NeuraHive core.
+### D. Core dependency boundary
+
+**PASS.** Mechanical tests enforce that the NeuraHive core does not import the legacy/platform compatibility layer.
+
+### E. Packaging
+
+**PASS.** `neurahive*` is included alongside the legacy namespace and the wheel can be installed into a clean environment with the public NeuraHive import available.
+
+### F. CI/security/build
+
+**PASS at the repository validation level.** Lint, scoped type checks, security scans, web build, wheel build, and clean import smoke tests are part of the CI gate. Any future CI regression blocks phase completion rather than being ignored.
+
+## Explicit non-goals
+
+Phase 1.1 does **not** claim that NeuraHive is a production agentic execution engine. The following remain future phases:
+
+- multi-step tool-call loop;
+- model failover/retry policy;
+- durable memory implementations;
+- MCP transport/adapters;
+- verification engine;
+- approvals/policy engine;
+- workflow/state machine;
+- tracing/events;
+- provider-specific adapters;
+- production packaging/distribution rename.
+
+## Exit decision
+
+**PHASE 1.1 COMPLETE.**
+
+The compatibility boundary and external SDK contract are now explicit, tested, documented, and isolated. The next phase may build the multi-step execution engine without importing or reproducing the legacy `RunnableAgent` monolith.
