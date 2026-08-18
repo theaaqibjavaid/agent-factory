@@ -23,6 +23,7 @@ from neurahive.contracts import (
     VerificationResult,
     Verifier,
 )
+from neurahive.runtime import BasicAgentExecutor, InProcessRuntime
 
 __all__ = [
     "Agent",
@@ -43,6 +44,8 @@ __all__ = [
     "ToolExecutor",
     "VerificationResult",
     "Verifier",
+    "BasicAgentExecutor",
+    "InProcessRuntime",
 ]
 
 __version__ = "2.0.0.dev0"
