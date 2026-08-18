@@ -71,19 +71,21 @@ Extract provider-neutral contracts and a platform-independent execution path wit
 Implemented: `neurahive` namespace; injected Agent contracts; Model/Memory/Tool contracts; verification/ToolExecutor/MCP contracts; `BasicAgentExecutor`; `InProcessRuntime`; core/platform import boundary; independent tests; external consumer example; v1→v2 compatibility strategy.
 
 ### Phase 1.1 — Compatibility + External Consumer Contract
-**Priority:** P0 | **Status:** active within Phase 1
+**Priority:** P0 | **Status:** **complete**
 
-**Architecture change discovered during implementation:** the legacy `RunnableAgent` is a platform-era monolith combining model failover, memory, MCP, verification, tool execution, history and retry behavior. It will **not** be copied into NeuraHive core. Compatibility will be an explicit adapter boundary.
+**Architecture change discovered during implementation:** the legacy `RunnableAgent` is a platform-era monolith combining model failover, memory, MCP, verification, tool execution, history and retry behavior. It is **not** copied into NeuraHive core. Compatibility is an explicit translation boundary.
 
-Current work:
+Completed:
 
-- document legacy → v2 mappings;
-- external consumer example using only `neurahive`;
-- compatibility tests;
-- compatibility may depend on core, never core on compatibility;
-- keep roadmap/phase/ADR/migration docs synchronized with implementation decisions.
+- legacy-shaped persona/configuration → `NeuraHive AgentConfig` translation;
+- explicit `agentfactory.compat` namespace;
+- compatibility `run`, `think`, and `execute_tool` surfaces;
+- external consumer example using only public `neurahive` APIs;
+- compatibility and isolation tests;
+- CI/build validation for the new namespace;
+- documentation, roadmap, and migration records synchronized with the implementation decision.
 
-Exit criteria: compatibility mapping documented/tested; external consumer executable; no reverse dependency from core into legacy/platform code.
+Exit result: **PASS.** Compatibility mapping is documented/tested; external consumer execution is demonstrated; no reverse dependency from NeuraHive core into compatibility/platform code.
 
 ### Phase 2 — Agent API v2
 **Priority:** P0 | **Status:** planned
