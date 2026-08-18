@@ -1,11 +1,51 @@
-"""NeuraHive v2 core namespace.
+"""NeuraHive v2 public core API.
 
-Phase 0 establishes this package boundary. Public runtime contracts are
-introduced incrementally during Phase 1+; platform/Studio modules must never
-be imported from this namespace.
+The v2 namespace is independent from the legacy AgentFactory platform. Core
+contracts are lightweight and dependency-injected; concrete model, memory,
+tool, policy, and platform integrations live outside the core.
 """
 
-__version__ = "2.0.0.dev0"
+from neurahive.core import (
+    Agent,
+    AgentConfig,
+    AgentContext,
+    AgentResult,
+    AgentRuntime,
+    ExecutionError,
+)
+from neurahive.tools import Tool, ToolRegistry, ToolResult
+from neurahive.providers import MemoryProvider, Model, ModelProvider
+from neurahive.contracts import (
+    MCPProvider,
+    ModelRequest,
+    ModelResponse,
+    ToolExecutor,
+    VerificationResult,
+    Verifier,
+)
+from neurahive.runtime import BasicAgentExecutor, InProcessRuntime
 
-# Keep the export surface explicit even while the v2 contracts are introduced.
-__all__: list[str] = ["__version__"]
+__all__ = [
+    "Agent",
+    "AgentConfig",
+    "AgentContext",
+    "AgentResult",
+    "AgentRuntime",
+    "ExecutionError",
+    "Tool",
+    "ToolRegistry",
+    "ToolResult",
+    "MemoryProvider",
+    "Model",
+    "ModelProvider",
+    "MCPProvider",
+    "ModelRequest",
+    "ModelResponse",
+    "ToolExecutor",
+    "VerificationResult",
+    "Verifier",
+    "BasicAgentExecutor",
+    "InProcessRuntime",
+]
+
+__version__ = "2.0.0.dev0"

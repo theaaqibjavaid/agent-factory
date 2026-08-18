@@ -23,9 +23,10 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt pytest pytest-asyncio pytest-cov httpx ruff mypy
+          pip install -e .
 
       - name: Lint — undefined names (real bugs)
-        run: ruff check --select F821 agentfactory tests
+        run: ruff check --select F821 agentfactory neurahive tests
 
       - name: Typecheck — platform surface (mypy)
         # Scoped to the modules we own; the legacy SDK has pre-existing
@@ -36,6 +37,9 @@ jobs:
                agentfactory/validation.py agentfactory/custom_tools.py \
                agentfactory/crypto.py agentfactory/redact.py \
                --follow-imports=skip --ignore-missing-imports
+
+      - name: Test — NeuraHive core contracts
+        run: pytest -q tests/core tests/test_neurahive_architecture_boundary.py tests/test_neurahive_runtime.py
 
       - name: Test + coverage gate (platform surface)
         # Source/omit/fail-under live in pyproject.toml [tool.coverage.*];
@@ -54,7 +58,7 @@ jobs:
         run: pip install bandit pip-audit
 
       - name: Bandit — static security scan (Python)
-        run: bandit -r agentfactory -q -ll
+        run: bandit -r agentfactory neurahive -q -ll
 
       - name: pip-audit — vulnerable dependency scan
         run: pip-audit -r requirements.txt
@@ -104,3 +108,8 @@ jobs:
           /tmp/venv/bin/pip install 'uvicorn[standard]'
           /tmp/venv/bin/python -c \
             "from agentfactory.app.main import app; import agentfactory.terminal, agentfactory.runtime; print('platform imports OK')"
+
+      - name: Smoke — NeuraHive public import in a clean venv
+        run: |
+          /tmp/venv/bin/python -c \
+            "import neurahive; from neurahive import Agent, AgentConfig, InProcessRuntime; print('neurahive import OK')"
