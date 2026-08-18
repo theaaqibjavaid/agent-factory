@@ -139,7 +139,7 @@ def _repo_root() -> Path:
 
 @cli.command()
 @click.option("--port", default=8000, show_default=True, help="Port to serve the Studio on")
-@click.option("--host", default="0.0.0.0", show_default=True, help="Bind address")
+@click.option("--host", default="0.0.0.0", show_default=True, help="Bind address")  # nosec B104 — intentional for Docker/container bind
 @click.option("--no-spa", is_flag=True, help="API only — do not build or serve the Studio UI")
 def studio(port: int, host: str, no_spa: bool):
     """
