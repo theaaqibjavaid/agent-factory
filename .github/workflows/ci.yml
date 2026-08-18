@@ -39,7 +39,7 @@ jobs:
                --follow-imports=skip --ignore-missing-imports
 
       - name: Test — NeuraHive core contracts
-        run: pytest -q tests/core tests/test_legacy_adapter.py
+        run: pytest -q tests/core tests/test_neurahive_architecture_boundary.py tests/test_neurahive_runtime.py
 
       - name: Test + coverage gate (platform surface)
         # Source/omit/fail-under live in pyproject.toml [tool.coverage.*];
