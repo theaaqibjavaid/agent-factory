@@ -1,87 +1,86 @@
-# Contributing to AgentFactory
+# Contributing to NeuraHive
 
-Thanks for contributing! AgentFactory is a universal, self-hostable AI agent
-framework. This guide covers local development, testing, and the contribution
-workflow.
+> The repository is transitioning from AgentFactory to NeuraHive v2. Feature work must follow the v2 architecture and branch policy.
 
 ## Development setup
 
 Requirements: Python 3.10–3.12, `git`, and `pip`.
 
 ```bash
-# Clone and install (editable, with dev/test dependencies)
 git clone https://github.com/theaaqibjavaid/agent-factory.git
 cd agent-factory
 python -m venv .venv
-source .venv/bin/activate           # Windows: .venv\Scripts\activate
-pip install -e '.[dev]'             # or: pip install -r requirements.txt pytest pytest-asyncio httpx PyJWT ruff
-
-# Copy env template (optional; the SDK runs without it)
-cp .env.example .env                # then add your LLM API keys
+source .venv/bin/activate
+pip install -e '.[dev]'
 ```
 
 ## Running tests
 
 ```bash
-pytest -q                           # full suite
-pytest tests/test_mcp_client.py -q  # a single file
+pytest -q
+pytest tests/test_mcp_client.py -q
 ```
 
-**Every bug fix or refactor must ship with regression tests.** The Phase 0
-audit-fix test files (`tests/test_base_agent.py`, `tests/test_worker.py`,
-`tests/test_approval_server.py`, `tests/test_cli.py`, `tests/test_mcp_client.py`)
-are the template to follow.
+Every bug fix or refactor must ship with regression tests. Architecture changes must also update the relevant NeuraHive v2 documentation and, where applicable, an ADR.
 
 ## Linting & static checks
 
 ```bash
-ruff check --select F821 agentfactory tests   # undefined names (CI gate)
-# Full lint config lives in pyproject.toml [tool.ruff]; the codebase has
-# pre-existing findings outside F821 that are tracked as cleanup work.
+ruff check --select F821 agentfactory tests
 ```
 
-CI (`.github/workflows/ci.yml`) runs on Python 3.10/3.11/3.12:
-- `ruff check --select F821`
-- `pytest`
-- wheel build + fresh-venv `pip install` smoke test (`agentfactory --version`)
+CI runs the repository's configured test, lint, type, security, coverage, package-build, and Studio checks.
 
-## Code style
+## Architecture rules
 
-- PEP 8, 100-char lines, Google-style docstrings (see `pyproject.toml`).
-- Type hints on all public functions/classes.
-- Structured logging with `structlog` — no bare `print` in library code.
-- New features go through the `@tool` decorator and `ToolRegistry`; no new
-  hardcoded agent behavior in `base_agent.py`.
+Read these before implementing v2 work:
+
+- `docs/NEURAHIVE_V2_ROADMAP.md` — source of truth for future architecture work.
+- `docs/NEURAHIVE_ARCHITECTURE_CONTRACT.md` — non-negotiable architecture rules.
+- `docs/NEURAHIVE_PUBLIC_API.md` — public/compatibility/internal API classification.
+- `docs/adr/` — architectural decisions.
+- `docs/NEURAHIVE_PHASE_0_ACCEPTANCE.md` — Phase 0 gate.
+
+The core must remain project-agnostic. New agents, tools, skills, memory providers, policies, models, and workflows belong in consuming projects or extension packages, not in NeuraHive core source.
+
+## Branch policy
+
+**Never commit feature work directly to `main` or `dev`.**
+
+Every phase/task gets its own `feature/*` branch. Branch from the agreed integration base, keep the branch focused, and open a PR when the phase is reviewable.
+
+Examples:
+
+```bash
+git checkout dev
+git pull
+git checkout -b feature/phase-1-sdk-core-separation
+```
+
+For follow-on phases, the base may be the reviewed phase branch when explicitly agreed. Do not silently rewrite or merge `main`/`dev` from feature work.
 
 ## Contribution workflow
 
-1. Create a feature branch from `main` — never commit directly to `main`/`master`:
-   ```bash
-   git checkout -b fix/my-bugfix
-   ```
-2. Make focused changes **with tests**; run the full suite until green.
-3. Commit with a descriptive message (imperative, ≤ 72 chars title):
-   ```bash
-   git add <files>
-   git commit -m "Fix proposal id collision when two proposals land in one second"
-   ```
-4. Push the branch and open a pull request:
-   ```bash
-   git push -u origin fix/my-bugfix
-   ```
-5. Keep PRs small and reviewable; reference the issue/phase task in the description.
+1. Select the phase/task from the NeuraHive v2 roadmap.
+2. Create a dedicated `feature/*` branch.
+3. Inspect existing implementation and tests before changing architecture.
+4. Implement the smallest coherent slice of the phase.
+5. Add/update tests and documentation.
+6. Run the relevant checks.
+7. Update roadmap/acceptance status.
+8. Open a reviewable PR.
 
-## Project layout (quick map)
+## Naming during migration
 
-- `agentfactory/` — the SDK: `base_agent.py` (agents), `base_tools.py`
-  (`@tool`, registries), `llm_manager.py` (failover/budget), `verifier.py`,
-  `memory.py` (SQLite), `skill.py`, `mcp_integration.py`, `app/` (FastAPI
-  approval server), `agents/` (worker, config loader), `tools/` (built-ins).
-- `docs/` — architecture, PRD, design, security, phases, and guides.
-- `tests/` — unit + regression tests (see `docs/AUDIT.md` for fix status).
+The target project identity is **NeuraHive**. The current repository and Python package still contain legacy `agentfactory` names during migration. Do not perform a broad package/repository rename as part of an unrelated feature. Naming migration must have its own planned phase and compatibility strategy.
+
+## Project layout
+
+- `agentfactory/` — current implementation during migration.
+- `docs/` — current documentation plus the NeuraHive v2 architecture/roadmap.
+- `tests/` — unit, integration, regression, and future contract tests.
+- `web/` — current Studio implementation.
 
 ## Reporting issues
 
-Include: Python version, `pip freeze` output, the failing command, and (for
-bugs) a minimal reproduction. Security issues: see `docs/security.md` and
-report privately rather than opening a public issue.
+Include Python version, relevant environment details, the failing command, and a minimal reproduction. Security issues must be reported privately according to `SECURITY.md`.

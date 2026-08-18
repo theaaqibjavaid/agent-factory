@@ -6,6 +6,9 @@
 
 - [NeuraHive v2 Master Roadmap](NEURAHIVE_V2_ROADMAP.md) — Complete phased roadmap, architecture boundaries, milestones, acceptance criteria, and implementation priorities.
 - [NeuraHive Architecture Contract](NEURAHIVE_ARCHITECTURE_CONTRACT.md) — Architectural constitution: core/platform boundary, dependency direction, public APIs, providers, security, workflows, testing, and branch policy.
+- [NeuraHive Public API Inventory](NEURAHIVE_PUBLIC_API.md) — Stable, experimental, compatibility, and internal API classification.
+- [NeuraHive Phase 0 Acceptance](NEURAHIVE_PHASE_0_ACCEPTANCE.md) — Executable/documentation gate for completing the architecture-contract phase.
+- [Architecture Decision Records](adr/README.md) — Decisions that constrain the v2 architecture.
 - [PRD](PRD.md) — Existing product requirements and platform scope.
 - [Phases](Phases.md) — Existing execution history/roadmap for the current platform; use the NeuraHive v2 roadmap for future architecture work.
 - [Architecture](architecture.md) — Current implementation architecture.
@@ -44,7 +47,7 @@
 - [Security Policy](../SECURITY.md) — vulnerability reporting.
 - [Code of Conduct](../CODE_OF_CONDUCT.md) — community standards.
 - [Changelog](../CHANGELOG.md) — release history.
-- [Contributing](../CONTRIBUTING.md) — development setup, testing rules, and PR workflow.
+- [Contributing](../CONTRIBUTING.md) — development setup, testing rules, contribution workflow, and feature-branch policy.
 
 ## Documentation Rule for v2
 
