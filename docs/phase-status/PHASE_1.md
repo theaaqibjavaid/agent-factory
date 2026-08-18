@@ -16,6 +16,8 @@ Make NeuraHive a genuine reusable SDK rather than a platform with an embedded SD
 - Added provider-neutral `Model`, `ModelProvider`, and `MemoryProvider` protocols.
 - Added instance-scoped `Tool` and `ToolRegistry` contracts.
 - Added provider-neutral model request/response, verification, tool-executor, and MCP contracts.
+- Added the platform-independent `BasicAgentExecutor` and `InProcessRuntime`.
+- Added an external-style runtime test using a fake model provider with no legacy runtime dependency.
 - Added public API exports from `neurahive`.
 - Included `neurahive*` in the package build without removing legacy `agentfactory*`.
 - Added core contract tests and a mechanical core/platform import boundary test.
@@ -46,6 +48,22 @@ platform-independent runtime
 
 The core must not discover dependencies through the platform database, Studio, or global registries.
 
+## Current validation target
+
+The minimum independent execution path now exists:
+
+```python
+from neurahive import Agent, AgentConfig, InProcessRuntime
+
+agent = Agent(
+    config=AgentConfig(name="example"),
+    model_provider=my_model_provider,
+)
+result = await InProcessRuntime().run(agent, "hello")
+```
+
+The model provider is supplied by the consuming project; NeuraHive does not select credentials or query platform state.
+
 ## Exit criteria
 
 Phase 1 is complete only when:
@@ -55,4 +73,5 @@ Phase 1 is complete only when:
 - model, tool, memory, MCP, and policy dependencies are injectable;
 - legacy AgentFactory remains usable through an explicit compatibility surface;
 - an external example project can create and execute an agent using only public NeuraHive APIs;
-- packaging/build checks pass.
+- packaging/build checks pass;
+- the compatibility adapter strategy for the legacy execution loop is documented and tested.
